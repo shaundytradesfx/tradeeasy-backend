@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+feedparser
+python-dotenv
+newspaper3k
+transformers
+APScheduler
+pytest
+httpx
