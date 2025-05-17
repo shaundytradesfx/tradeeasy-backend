@@ -1,3 +1,4 @@
+# CI/CD Status
 # TradeEasy Backend
 
 Real-time sentiment analytics platform for equities, FX, crypto, and commodities.
