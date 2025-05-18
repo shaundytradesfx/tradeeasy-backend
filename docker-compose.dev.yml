@@ -1,0 +1,75 @@
+version: '3.8'
+
+# Development configuration for TradeEasy backend
+# Run with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  web:
+    # Override the web service from base docker-compose.yml
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Use development target if you have a multi-stage Dockerfile
+      # target: development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DATABASE_URL=postgresql://tradeeasy:tradeeasy@db:5432/tradeeasy
+      - RSS_SOURCES=https://www.investing.com/rss/news_25.rss,https://www.cnbc.com/id/10000664/device/rss/rss.html,https://www.reuters.com/rssfeed/businessNews
+      - LOG_LEVEL=DEBUG  # More verbose logging in development
+      - SECRET_KEY=developmentsecretkey
+      - RELOAD=true
+    volumes:
+      # Mount the entire project for hot-reloading
+      - .:/app
+      # Exclude virtualenv directory to prevent conflicts
+      - /app/venv
+    ports:
+      - "8000:8000"
+    # Development-specific healthcheck (more frequent)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Database admin tool
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@tradeeasy.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_LISTEN_PORT=5050
+    ports:
+      - "5050:5050"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - tradeeasy-network
+
+  # Test database for running tests independently
+  test-db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=tradeeasy
+      - POSTGRES_PASSWORD=tradeeasy
+      - POSTGRES_DB=tradeeasy_test
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with main db
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradeeasy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tradeeasy-network
+
+volumes:
+  pgadmin-data:
+  test-postgres-data:
