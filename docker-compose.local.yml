@@ -1,0 +1,131 @@
+version: '3.8'
+
+# TradeEasy Local Development Configuration
+# Run with: docker-compose -f docker-compose.local.yml up
+
+services:
+  # Main FastAPI application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://tradeeasy:tradeeasy@db:5432/tradeeasy
+      - RSS_SOURCES=https://www.investing.com/rss/news_25.rss,https://www.cnbc.com/id/10000664/device/rss/rss.html,https://www.reuters.com/rssfeed/businessNews
+      - LOG_LEVEL=DEBUG
+      - SECRET_KEY=developmentsecretkey
+      - RELOAD=true
+      - HUGGINGFACE_TOKEN=your_huggingface_token_here
+    volumes:
+      # Mount the entire project for hot-reloading
+      - .:/app
+      # Exclude virtualenv directory to prevent conflicts
+      - /app/venv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - tradeeasy-network
+
+  # PostgreSQL database
+  db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Mount initialization scripts
+      - ./database/migrations/init:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_USER=tradeeasy
+      - POSTGRES_PASSWORD=tradeeasy
+      - POSTGRES_DB=tradeeasy
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradeeasy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - tradeeasy-network
+
+  # Database initialization service (runs once)
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ./database/init.sh
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PG_HOST=db
+      - PG_PORT=5432
+      - PG_USER=tradeeasy
+      - PGPASSWORD=tradeeasy
+      - PG_DB=tradeeasy
+    volumes:
+      - ./database:/app/database
+    networks:
+      - tradeeasy-network
+
+  # Database admin tool
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@tradeeasy.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_LISTEN_PORT=5050
+    ports:
+      - "5050:5050"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - tradeeasy-network
+
+  # Test database for running tests independently
+  test-db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=tradeeasy
+      - POSTGRES_PASSWORD=tradeeasy
+      - POSTGRES_DB=tradeeasy_test
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with main db
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+      # Mount initialization scripts (excluding seed data)
+      - ./database/migrations/init/01_create_tables.sql:/docker-entrypoint-initdb.d/01_create_tables.sql
+      - ./database/migrations/init/02_create_indexes.sql:/docker-entrypoint-initdb.d/02_create_indexes.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradeeasy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - tradeeasy-network
+
+volumes:
+  postgres-data:
+  pgadmin-data:
+  test-postgres-data:
+
+networks:
+  tradeeasy-network:
+    driver: bridge
