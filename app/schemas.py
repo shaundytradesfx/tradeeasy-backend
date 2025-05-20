@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel, HttpUrl, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 # Article schemas
@@ -10,6 +11,9 @@ class ArticleBase(BaseModel):
     title: str
     content: str
     url: str
+    authors: Optional[str] = None
+    image_url: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class ArticleCreate(ArticleBase):
@@ -19,7 +23,7 @@ class ArticleCreate(ArticleBase):
 class Article(ArticleBase):
     id: UUID
     published_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -36,7 +40,7 @@ class SentimentCreate(SentimentBase):
 class Sentiment(SentimentBase):
     id: UUID
     article_id: UUID
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -53,7 +57,7 @@ class SentimentAggregateCreate(SentimentAggregateBase):
 class SentimentAggregate(SentimentAggregateBase):
     id: UUID
     timestamp: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -69,7 +73,7 @@ class WatchlistCreate(WatchlistBase):
 class Watchlist(WatchlistBase):
     id: UUID
     user_id: UUID
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -90,7 +94,7 @@ class Alert(AlertBase):
     created_at: datetime
     triggered_at: Optional[datetime] = None
     is_active: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

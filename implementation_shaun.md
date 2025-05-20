@@ -7,6 +7,7 @@ Create Python venv; install FastAPI, Uvicorn, SQLAlchemy, feedparser, newspaper3
 Scaffold directory structure: app/main.py, app/database.py, app/models.py, app/routers/ingestion.py, tests/
 Define .env.example with DATABASE_URL, RSS_SOURCES
 Write GET /health endpoint in main.py
+
 Ruckshi (Frontend)
 
 Initialize tradeeasy-ui repo via create-next-app with TypeScript, ESLint, Tailwind
@@ -14,6 +15,7 @@ Install Aceternity UI (npm install @aceternity/ui)
 Configure tailwind.config.js for dark theme (primary, accent, bg colors)
 Scaffold page structure under src/pages: dashboard.tsx, search.tsx, watchlist.tsx, alerts.tsx, asset/[symbol].tsx
 Create Layout.tsx (Navbar + Sidebar) and wrap in _app.tsx
+
 Week 2: Ingestion & UI Skeleton
 
 Shaun
@@ -28,6 +30,7 @@ Ruckshi
 Build basic routes and navigation with Aceternity’s <Navbar> and <Container>
 Create UI “stub” components for Dashboard, Search, Watchlist, Alerts, Asset Detail (placeholder cards)
 Point each page at stubbed JSON endpoints (e.g. /api/health, /api/articles)
+
 Week 3: NLP Pipeline & Dashboard Prototype
 
 Shaun

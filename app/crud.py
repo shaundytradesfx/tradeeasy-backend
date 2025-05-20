@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session
-from uuid import UUID
 from datetime import datetime, timedelta
 from typing import List, Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from . import models, schemas
 
@@ -16,7 +17,13 @@ def get_article_by_url(db: Session, url: str):
 
 
 def get_articles(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Article).order_by(models.Article.published_at.desc()).offset(skip).limit(limit).all()
+    return (
+        db.query(models.Article)
+        .order_by(models.Article.published_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def create_article(db: Session, article: schemas.ArticleCreate):
@@ -25,7 +32,10 @@ def create_article(db: Session, article: schemas.ArticleCreate):
         title=article.title,
         content=article.content,
         url=article.url,
-        published_at=article.published_at or datetime.utcnow()
+        published_at=article.published_at or datetime.utcnow(),
+        authors=article.authors,
+        image_url=article.image_url,
+        summary=article.summary,
     )
     db.add(db_article)
     db.commit()
@@ -35,11 +45,17 @@ def create_article(db: Session, article: schemas.ArticleCreate):
 
 # Sentiment CRUD operations
 def get_sentiment(db: Session, sentiment_id: UUID):
-    return db.query(models.Sentiment).filter(models.Sentiment.id == sentiment_id).first()
+    return (
+        db.query(models.Sentiment).filter(models.Sentiment.id == sentiment_id).first()
+    )
 
 
 def get_sentiments_by_article(db: Session, article_id: UUID):
-    return db.query(models.Sentiment).filter(models.Sentiment.article_id == article_id).all()
+    return (
+        db.query(models.Sentiment)
+        .filter(models.Sentiment.article_id == article_id)
+        .all()
+    )
 
 
 def create_sentiment(db: Session, sentiment: schemas.SentimentCreate):
@@ -52,7 +68,11 @@ def create_sentiment(db: Session, sentiment: schemas.SentimentCreate):
 
 # SentimentAggregate CRUD operations
 def get_sentiment_aggregate(db: Session, aggregate_id: UUID):
-    return db.query(models.SentimentAggregate).filter(models.SentimentAggregate.id == aggregate_id).first()
+    return (
+        db.query(models.SentimentAggregate)
+        .filter(models.SentimentAggregate.id == aggregate_id)
+        .first()
+    )
 
 
 def get_sentiment_history(db: Session, asset: str, time_range: Optional[int] = None):
@@ -60,20 +80,24 @@ def get_sentiment_history(db: Session, asset: str, time_range: Optional[int] = N
     Get sentiment history for a specific asset over the last time_range hours.
     If time_range is None, return all history.
     """
-    query = db.query(models.SentimentAggregate).filter(models.SentimentAggregate.asset == asset)
-    
+    query = db.query(models.SentimentAggregate).filter(
+        models.SentimentAggregate.asset == asset
+    )
+
     if time_range:
         cutoff_time = datetime.utcnow() - timedelta(hours=time_range)
         query = query.filter(models.SentimentAggregate.timestamp >= cutoff_time)
-    
+
     return query.order_by(models.SentimentAggregate.timestamp.asc()).all()
 
 
-def create_sentiment_aggregate(db: Session, aggregate: schemas.SentimentAggregateCreate):
+def create_sentiment_aggregate(
+    db: Session, aggregate: schemas.SentimentAggregateCreate
+):
     db_aggregate = models.SentimentAggregate(
         asset=aggregate.asset,
         avg_score=aggregate.avg_score,
-        timestamp=aggregate.timestamp or datetime.utcnow()
+        timestamp=aggregate.timestamp or datetime.utcnow(),
     )
     db.add(db_aggregate)
     db.commit()
@@ -83,7 +107,9 @@ def create_sentiment_aggregate(db: Session, aggregate: schemas.SentimentAggregat
 
 # Watchlist CRUD operations
 def get_watchlist(db: Session, watchlist_id: UUID):
-    return db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id).first()
+    return (
+        db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id).first()
+    )
 
 
 def get_watchlists_by_user(db: Session, user_id: UUID):
@@ -99,7 +125,9 @@ def create_watchlist(db: Session, watchlist: schemas.WatchlistCreate):
 
 
 def delete_watchlist(db: Session, watchlist_id: UUID):
-    db_watchlist = db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id).first()
+    db_watchlist = (
+        db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id).first()
+    )
     if db_watchlist:
         db.delete(db_watchlist)
         db.commit()
@@ -125,7 +153,7 @@ def create_alert(db: Session, alert: schemas.AlertCreate):
         threshold=alert.threshold,
         direction=alert.direction,
         created_at=datetime.utcnow(),
-        is_active=True
+        is_active=True,
     )
     db.add(db_alert)
     db.commit()

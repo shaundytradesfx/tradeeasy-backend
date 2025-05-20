@@ -114,6 +114,9 @@ class Article(Base):
     content = Column(Text, nullable=False)
     published_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     url = Column(String(512), nullable=False, unique=True)
+    authors = Column(String(512), nullable=True)  # Comma-separated list of authors
+    image_url = Column(String(1024), nullable=True)  # URL to the top image
+    summary = Column(Text, nullable=True)  # Auto-generated summary of the article
 
     # Define relationship with Sentiment
     sentiments = relationship(
