@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -41,6 +41,79 @@ def create_article(db: Session, article: schemas.ArticleCreate):
     db.commit()
     db.refresh(db_article)
     return db_article
+
+
+def upsert_article(db: Session, article: schemas.ArticleCreate) -> Tuple[models.Article, bool]:
+    """
+    Upsert an article - create if it doesn't exist, update if it does.
+    Uses URL for deduplication.
+    
+    Args:
+        db: Database session
+        article: Article data to create or update
+        
+    Returns:
+        Tuple of (article object, was_created boolean)
+    """
+    # Check if article with the same URL already exists
+    existing_article = get_article_by_url(db, article.url)
+    
+    created = False
+    
+    if existing_article:
+        # Update existing article
+        existing_article.title = article.title
+        existing_article.content = article.content
+        existing_article.source = article.source
+        
+        # Only update published_at if the new date is provided and is earlier
+        if article.published_at and (
+            not existing_article.published_at or 
+            article.published_at < existing_article.published_at
+        ):
+            existing_article.published_at = article.published_at
+            
+        # Update optional fields if provided
+        if article.authors:
+            existing_article.authors = article.authors
+        if article.image_url:
+            existing_article.image_url = article.image_url
+        if article.summary:
+            existing_article.summary = article.summary
+            
+        db.commit()
+        db.refresh(existing_article)
+        return existing_article, created
+    else:
+        # Create new article
+        created = True
+        return create_article(db, article), created
+
+
+def get_articles_by_date_range(db: Session, start_date: datetime, end_date: datetime, 
+                              skip: int = 0, limit: int = 100):
+    """
+    Get articles published within a specific date range.
+    
+    Args:
+        db: Database session
+        start_date: Start date for the range
+        end_date: End date for the range
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of articles within the date range
+    """
+    return (
+        db.query(models.Article)
+        .filter(models.Article.published_at >= start_date)
+        .filter(models.Article.published_at <= end_date)
+        .order_by(models.Article.published_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 # Sentiment CRUD operations
