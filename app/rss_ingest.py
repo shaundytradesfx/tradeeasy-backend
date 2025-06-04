@@ -26,6 +26,16 @@ from .rss_feeds import ALL_FEEDS, FEED_CATEGORIES
 from .metrics import metrics
 from . import models
 
+# Import WebSocket manager for real-time broadcasting
+try:
+    from .websocket_manager import websocket_manager
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    # Handle case where websocket_manager might not be available
+    WEBSOCKET_AVAILABLE = False
+    websocket_manager = None
+    logger.warning("WebSocket manager not available - real-time broadcasting disabled")
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -676,7 +686,9 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                         continue
                     
                     # Analyze sentiment for new article
+                    sentiment_start_time = time.time()
                     sentiment_result = analyze_sentiment(article.content)
+                    sentiment_processing_time = time.time() - sentiment_start_time
                     
                     # Create sentiment record
                     sentiment_data = schemas.SentimentCreate(
@@ -685,7 +697,39 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                         finbert_score=sentiment_result.get("finbert_score")
                     )
                     
-                    crud.create_sentiment(db, sentiment_data)
+                    new_sentiment = crud.create_sentiment(db, sentiment_data)
+                    
+                    # Broadcast sentiment update via WebSocket if available
+                    if WEBSOCKET_AVAILABLE and websocket_manager:
+                        try:
+                            import asyncio
+                            
+                            # Prepare article data for broadcasting
+                            article_data = {
+                                "id": article.id,
+                                "title": article.title,
+                                "source": article.source,
+                                "url": article.url,
+                                "published_at": article.published_at.isoformat() if article.published_at else None,
+                                "asset_class": getattr(article, 'asset_class', 'unknown')
+                            }
+                            
+                            # Prepare sentiment data for broadcasting
+                            broadcast_sentiment_data = {
+                                "lexicon_score": sentiment_result.get("lexicon_score"),
+                                "finbert_score": sentiment_result.get("finbert_score"),
+                                "processing_time": sentiment_processing_time
+                            }
+                            
+                            # Schedule the broadcast (since we're in a sync function)
+                            asyncio.create_task(
+                                websocket_manager.broadcast_sentiment_update(
+                                    article_data, broadcast_sentiment_data
+                                )
+                            )
+                            
+                        except Exception as ws_error:
+                            logger.warning(f"Failed to broadcast sentiment update: {ws_error}")
                     
                 except Exception as e:
                     logger.error(f"Error analyzing sentiment for article {article.id}: {e}")
@@ -710,6 +754,32 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                             alert_stats["alerts_triggered"] += len(triggered_ids)
                             alert_stats["triggered_alert_ids"].extend(triggered_ids)
                             logger.info(f"Triggered {len(triggered_ids)} alerts for {symbol} (score: {sentiment_score:.3f})")
+                            
+                            # Broadcast alert triggers via WebSocket if available
+                            if WEBSOCKET_AVAILABLE and websocket_manager:
+                                try:
+                                    import asyncio
+                                    
+                                    for alert_id in triggered_ids:
+                                        # Get alert details for broadcasting
+                                        alert = crud.get_alert(db, alert_id)
+                                        if alert:
+                                            alert_data = {
+                                                "alert_id": alert_id,
+                                                "asset_symbol": symbol,
+                                                "threshold": alert.threshold,
+                                                "direction": alert.direction,
+                                                "current_sentiment": sentiment_score,
+                                                "user_id": alert.user_id
+                                            }
+                                            
+                                            # Schedule the broadcast
+                                            asyncio.create_task(
+                                                websocket_manager.broadcast_alert_triggered(alert_data)
+                                            )
+                                            
+                                except Exception as ws_error:
+                                    logger.warning(f"Failed to broadcast alert trigger: {ws_error}")
                         
                         alert_stats["alerts_checked"] += 1
                         

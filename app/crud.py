@@ -1,10 +1,23 @@
+"""CRUD operations for TradeEasy database models."""
+
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func, and_, text, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models, schemas
+
+# Import WebSocket manager for real-time broadcasting
+try:
+    from .websocket_manager import websocket_manager
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    # Handle case where websocket_manager might not be available
+    WEBSOCKET_AVAILABLE = False
+    websocket_manager = None
 
 
 # Article CRUD operations
@@ -342,6 +355,32 @@ def compute_hourly_sentiment_averages(db: Session, target_hour: Optional[datetim
         db.commit()
         for agg in created_aggregates:
             db.refresh(agg)
+    
+        # Broadcast aggregate updates via WebSocket if available
+        if WEBSOCKET_AVAILABLE and websocket_manager:
+            try:
+                import asyncio
+                
+                for agg in created_aggregates:
+                    # Get asset information
+                    asset = db.query(models.Asset).filter(models.Asset.id == agg.asset_id).first()
+                    if asset:
+                        aggregate_data = {
+                            "avg_score": agg.avg_score,
+                            "article_count": len(article_ids),  # Approximate count
+                            "time_period": "1h"
+                        }
+                        
+                        # Schedule the broadcast
+                        asyncio.create_task(
+                            websocket_manager.broadcast_aggregate_update(
+                                asset.symbol, aggregate_data
+                            )
+                        )
+                        
+            except Exception as ws_error:
+                # Don't fail the whole operation if WebSocket broadcasting fails
+                pass  # Silently fail to avoid breaking the aggregation process
     
     return created_aggregates
 

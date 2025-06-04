@@ -1,10 +1,11 @@
 """Main FastAPI application with RSS ingestion, sentiment analysis, and metrics."""
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from prometheus_client import start_http_server
 
 from .database import engine, SessionLocal
@@ -12,6 +13,7 @@ from .models import Base
 from .routers import ingestion, sentiment, search, watchlist, alerts, auth
 from .rss_ingest import ingest_all_feeds, ingest_with_alert_checking
 from .metrics import metrics
+from .websocket_manager import websocket_manager
 from . import crud
 
 # Set up logging
@@ -188,7 +190,8 @@ async def api_status():
             "watchlists": True,
             "alerts": True,
             "authentication": "demo",
-            "background_alert_checking": True
+            "background_alert_checking": True,
+            "websocket_streaming": True
         },
         "endpoints": {
             "auth": "/api/auth/*",
@@ -196,10 +199,106 @@ async def api_status():
             "alerts": "/api/alerts/*",
             "sentiment": "/api/sentiment/*",
             "search": "/api/search/*",
-            "ingestion": "/ingestion/*"
+            "ingestion": "/ingestion/*",
+            "websocket": "/ws/sentiment"
         },
         "scheduler_jobs": ["rss_ingestion_with_alerts", "hourly_aggregates", "alert_maintenance"]
     }
+
+
+@app.websocket("/ws/sentiment")
+async def websocket_sentiment_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time sentiment updates.
+    
+    Clients can connect to this endpoint to receive real-time broadcasts of:
+    - New sentiment analysis results
+    - Aggregate sentiment updates  
+    - Alert notifications
+    """
+    await websocket_manager.connect(websocket)
+    try:
+        while True:
+            # Keep the connection alive and handle any client messages
+            data = await websocket.receive_text()
+            
+            # Echo back any received message for testing
+            if data:
+                await websocket_manager.send_personal_message({
+                    "type": "echo",
+                    "message": f"Received: {data}",
+                    "timestamp": datetime.utcnow().isoformat()
+                }, websocket)
+                
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        websocket_manager.disconnect(websocket)
+
+
+@app.get("/api/websocket/stats")
+async def get_websocket_stats():
+    """Get statistics about active WebSocket connections."""
+    return await websocket_manager.get_connection_stats()
+
+
+@app.post("/api/websocket/test-broadcast")
+async def test_websocket_broadcast():
+    """Test endpoint to manually trigger WebSocket broadcasts."""
+    try:
+        # Test sentiment update broadcast
+        test_article_data = {
+            "id": "test-123",
+            "title": "Test Article for WebSocket Broadcasting",
+            "source": "test-source",
+            "url": "https://example.com/test",
+            "published_at": datetime.utcnow().isoformat(),
+            "asset_class": "test"
+        }
+        
+        test_sentiment_data = {
+            "lexicon_score": 0.5,
+            "finbert_score": 0.3,
+            "processing_time": 0.1
+        }
+        
+        await websocket_manager.broadcast_sentiment_update(test_article_data, test_sentiment_data)
+        
+        # Test aggregate update broadcast
+        test_aggregate_data = {
+            "avg_score": 0.4,
+            "article_count": 5,
+            "time_period": "1h"
+        }
+        
+        await websocket_manager.broadcast_aggregate_update("TEST", test_aggregate_data)
+        
+        # Test alert triggered broadcast
+        test_alert_data = {
+            "alert_id": "test-alert-123",
+            "asset_symbol": "TEST",
+            "threshold": 0.5,
+            "direction": "above",
+            "current_sentiment": 0.6,
+            "user_id": "test-user-123"
+        }
+        
+        await websocket_manager.broadcast_alert_triggered(test_alert_data)
+        
+        return {
+            "status": "success",
+            "message": "Test broadcasts sent",
+            "broadcasts_sent": 3,
+            "active_connections": len(websocket_manager.active_connections)
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to send test broadcasts: {str(e)}",
+            "active_connections": len(websocket_manager.active_connections)
+        }
 
 
 @app.get("/metrics")
