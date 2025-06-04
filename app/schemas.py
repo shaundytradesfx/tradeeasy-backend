@@ -46,24 +46,69 @@ class Sentiment(SentimentBase):
 
 # SentimentAggregate schemas
 class SentimentAggregateBase(BaseModel):
-    asset: str
     avg_score: float
 
 
 class SentimentAggregateCreate(SentimentAggregateBase):
+    asset_id: UUID
     timestamp: Optional[datetime] = None
 
 
 class SentimentAggregate(SentimentAggregateBase):
     id: UUID
+    asset_id: UUID
     timestamp: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Watchlist schemas
+# Asset schemas
+class AssetBase(BaseModel):
+    symbol: str
+    name: str
+    type: str
+    description: Optional[str] = None
+
+
+class AssetCreate(AssetBase):
+    pass
+
+
+class Asset(AssetBase):
+    id: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Enhanced SentimentAggregate with Asset details for API responses
+class SentimentAggregateWithAsset(SentimentAggregateBase):
+    id: UUID
+    timestamp: datetime
+    asset: Asset
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# User schemas
+class UserBase(BaseModel):
+    username: str
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class User(UserBase):
+    id: UUID
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Watchlist schemas (updated)
 class WatchlistBase(BaseModel):
-    asset: str
+    asset_id: UUID
 
 
 class WatchlistCreate(WatchlistBase):
@@ -73,15 +118,26 @@ class WatchlistCreate(WatchlistBase):
 class Watchlist(WatchlistBase):
     id: UUID
     user_id: UUID
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Alert schemas
+# Enhanced Watchlist with Asset details
+class WatchlistWithAsset(BaseModel):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
+    asset: Asset
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Alert schemas (updated)
 class AlertBase(BaseModel):
-    asset: str
+    asset_id: UUID
     threshold: float
-    direction: str = Field(..., description="Either 'above' or 'below'")
+    direction: str  # 'above' or 'below'
 
 
 class AlertCreate(AlertBase):
@@ -93,9 +149,36 @@ class Alert(AlertBase):
     user_id: UUID
     created_at: datetime
     triggered_at: Optional[datetime] = None
-    is_active: bool
+    is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AlertWithAsset(BaseModel):
+    id: UUID
+    user_id: UUID
+    asset_id: UUID
+    threshold: float
+    direction: str
+    created_at: datetime
+    triggered_at: Optional[datetime] = None
+    is_active: bool = True
+    asset: Asset
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Authentication schemas
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_id: str
+    username: str
 
 
 # Sentiment Analysis Request/Response
@@ -111,3 +194,39 @@ class SentimentAnalysisResponse(BaseModel):
 # Health Check Response
 class HealthCheck(BaseModel):
     status: str = "ok"
+
+
+# Search schemas
+class SearchRequest(BaseModel):
+    q: str = Field(..., description="Search query string")
+    skip: int = Field(0, ge=0, description="Number of records to skip")
+    limit: int = Field(100, ge=1, le=1000, description="Maximum number of records to return")
+
+
+class ArticleWithSentiment(BaseModel):
+    """Article with its associated sentiment data."""
+    article: Article
+    sentiments: List[Sentiment]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SearchResponse(BaseModel):
+    """Search results with pagination info."""
+    results: List[ArticleWithSentiment]
+    total_count: int
+    query: str
+    skip: int
+    limit: int
+    has_more: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SearchSuggestion(BaseModel):
+    """Search suggestion for autocomplete."""
+    term: str
+    frequency: int
+    category: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

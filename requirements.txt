@@ -9,3 +9,5 @@ transformers
 APScheduler
 pytest
 httpx
+spacy
+beautifulsoup4

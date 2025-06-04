@@ -2,14 +2,15 @@
 RSS Feed Ingestion Module for TradeEasy.
 
 This module contains the functionality to fetch, validate, parse and store
-RSS feed content from various financial news sources.
+RSS feed content from various financial news sources with comprehensive
+metrics tracking and enhanced error handling.
 """
 
 import hashlib
 import logging
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -22,30 +23,47 @@ from sqlalchemy.orm import Session
 
 from . import crud, schemas
 from .rss_feeds import ALL_FEEDS, FEED_CATEGORIES
+from .metrics import metrics
+from . import models
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Global flag to track NLTK resource availability
+NLTK_RESOURCES_AVAILABLE = False
+
 # Download necessary NLTK resources for article extraction
 try:
+    # Download core tokenization resources
     nltk.download("punkt", quiet=True)
+    nltk.download("punkt_tab", quiet=True)  # Explicitly download punkt_tab
     nltk.download("stopwords", quiet=True)
-    # Create punkt_tab if it doesn't exist
+    
+    # Verify resources are available
     try:
-        # Check if punkt_tab exists first to avoid unnecessary downloads
         nltk.data.find("tokenizers/punkt_tab/english/")
+        NLTK_RESOURCES_AVAILABLE = True
+        logger.info("NLTK resources successfully downloaded and verified")
     except LookupError:
-        # If punkt_tab doesn't exist, use punkt instead
-        punkt_path = nltk.data.find("tokenizers/punkt")
-        logger.info("Using punkt instead of punkt_tab for NLP operations")
+        try:
+            # Fallback to punkt if punkt_tab is not available
+            nltk.data.find("tokenizers/punkt")
+            NLTK_RESOURCES_AVAILABLE = True
+            logger.info("Using punkt tokenizer (punkt_tab not available)")
+        except LookupError:
+            logger.warning("Neither punkt_tab nor punkt tokenizers are available - NLP features will be limited")
+            NLTK_RESOURCES_AVAILABLE = False
+            
 except Exception as e:
-    logger.warning(f"Failed to download NLTK resources: {e}")
+    logger.warning(f"Failed to download NLTK resources: {e} - NLP features will be limited")
+    NLTK_RESOURCES_AVAILABLE = False
 
-# Maximum number of retries for article extraction
-MAX_RETRIES = 3
-# Timeout for article downloads (seconds)
-DOWNLOAD_TIMEOUT = 10
+# Enhanced retry configuration
+MAX_RETRIES = 5
+DOWNLOAD_TIMEOUT = 15
+BASE_DELAY = 1.0  # Base delay for exponential backoff
+MAX_DELAY = 60.0  # Maximum delay between retries
 
 
 def validate_feed(url: str) -> Tuple[bool, str]:
@@ -63,10 +81,12 @@ def validate_feed(url: str) -> Tuple[bool, str]:
 
         # Check if feed has bozo exception (invalid XML)
         if feed.bozo:
+            metrics.record_error('feed_validation_error', FEED_CATEGORIES.get(url, 'unknown'))
             return False, f"Feed has invalid XML: {feed.bozo_exception}"
 
         # Check if feed has entries
         if not feed.entries:
+            metrics.record_error('feed_no_entries', FEED_CATEGORIES.get(url, 'unknown'))
             return False, "Feed has no entries"
 
         # Check if entries have required fields
@@ -77,6 +97,7 @@ def validate_feed(url: str) -> Tuple[bool, str]:
         ]
 
         if missing_fields:
+            metrics.record_error('feed_missing_fields', FEED_CATEGORIES.get(url, 'unknown'))
             return (
                 False,
                 f"Feed entries missing required fields: {', '.join(missing_fields)}",
@@ -85,6 +106,7 @@ def validate_feed(url: str) -> Tuple[bool, str]:
         return True, "Feed is valid"
 
     except Exception as e:
+        metrics.record_error('feed_validation_exception', FEED_CATEGORIES.get(url, 'unknown'))
         return False, f"Error validating feed: {str(e)}"
 
 
@@ -98,57 +120,84 @@ def parse_rss_feed(url: str) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries containing parsed feed entries
     """
-    logger.info(f"Parsing RSS feed: {url}")
-    feed = feedparser.parse(url)
+    start_time = time.time()
+    category = FEED_CATEGORIES.get(url, 'unknown')
+    
+    logger.info(f"Parsing RSS feed: {url} (category: {category})")
+    
+    try:
+        feed = feedparser.parse(url)
 
-    if feed.bozo:
-        logger.error(f"Error parsing RSS feed {url}: {feed.bozo_exception}")
+        if feed.bozo:
+            error_msg = f"Error parsing RSS feed {url}: {feed.bozo_exception}"
+            logger.error(error_msg)
+            metrics.record_error('feed_parse_error', category)
+            return []
+
+        standardized_entries = []
+        for entry in feed.entries:
+            # Skip entries without required fields
+            if not hasattr(entry, "link") or not hasattr(entry, "title"):
+                continue
+
+            # Create a standardized entry dictionary
+            std_entry = {
+                "title": entry.title,
+                "link": entry.link,
+                "published_at": None,
+                "source": url,
+                "summary": getattr(entry, "summary", ""),
+                "asset_class": category,
+            }
+
+            # Try to get published date in a standardized format
+            if hasattr(entry, "published_parsed") and entry.published_parsed:
+                try:
+                    published_time = time.mktime(entry.published_parsed)
+                    std_entry["published_at"] = datetime.fromtimestamp(published_time)
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Could not parse publication date: {e}")
+
+            standardized_entries.append(std_entry)
+
+        duration = time.time() - start_time
+        logger.info(f"Parsed {len(standardized_entries)} entries from {url} in {duration:.2f}s")
+        
+        # Record metrics
+        metrics.record_entries_processed(len(standardized_entries), category)
+        
+        return standardized_entries
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"Exception parsing RSS feed {url}: {e}")
+        metrics.record_error('feed_parse_exception', category)
         return []
 
-    standardized_entries = []
-    for entry in feed.entries:
-        # Skip entries without required fields
-        if not hasattr(entry, "link") or not hasattr(entry, "title"):
-            continue
 
-        # Create a standardized entry dictionary
-        std_entry = {
-            "title": entry.title,
-            "link": entry.link,
-            "published_at": None,
-            "source": url,
-            "summary": getattr(entry, "summary", ""),
-            "asset_class": FEED_CATEGORIES.get(url, "unknown"),
-        }
-
-        # Try to get published date in a standardized format
-        if hasattr(entry, "published_parsed") and entry.published_parsed:
-            try:
-                published_time = time.mktime(entry.published_parsed)
-                std_entry["published_at"] = datetime.fromtimestamp(published_time)
-            except (TypeError, ValueError) as e:
-                logger.warning(f"Could not parse publication date: {e}")
-
-        standardized_entries.append(std_entry)
-
-    logger.info(f"Parsed {len(standardized_entries)} entries from {url}")
-    return standardized_entries
-
-
-# Define a backoff strategy for retries with exponential backoff
+# Enhanced backoff strategy with better error handling
 @backoff.on_exception(
     backoff.expo,
     (
         requests.exceptions.RequestException,
         requests.exceptions.Timeout,
         requests.exceptions.ConnectionError,
+        requests.exceptions.HTTPError,
     ),
     max_tries=MAX_RETRIES,
+    base=BASE_DELAY,
+    max_value=MAX_DELAY,
     jitter=backoff.full_jitter,
+    on_backoff=lambda details: logger.warning(
+        f"Article download retry {details['tries']}/{MAX_RETRIES} for {details.get('args', ['unknown'])[0] if details.get('args') else 'unknown'}: {details['exception']}"
+    ),
+    on_giveup=lambda details: logger.error(
+        f"Article download failed after {details['tries']} attempts for {details.get('args', ['unknown'])[0] if details.get('args') else 'unknown'}: {details['exception']}"
+    )
 )
 def download_article(url: str) -> NewsArticle:
     """
-    Download an article with retries and exception handling.
+    Download an article with enhanced retries and exception handling.
 
     Args:
         url: The URL of the article to download
@@ -198,124 +247,90 @@ def normalize_whitespace(text: str) -> str:
         Normalized text
     """
     # Replace multiple whitespace characters with a single space
-    text = re.sub(r"\s+", " ", text)
-    # Remove leading/trailing whitespace
-    text = text.strip()
-    # Normalize paragraphs - ensure a single newline between paragraphs
-    text = re.sub(r"\n\s*\n", "\n\n", text)
-    return text
+    return re.sub(r'\s+', ' ', text).strip()
 
 
 def extract_article_content(url: str, rss_summary: str = "") -> Dict[str, Any]:
     """
-    Extract the full content and metadata of an article from its URL using newspaper3k.
-    Falls back to RSS summary if extraction fails.
+    Extract full article content from a URL with enhanced error handling and metrics.
 
     Args:
-        url: The URL of the article to extract content from
-        rss_summary: Optional RSS feed summary to use as fallback
+        url: The URL of the article to extract
+        rss_summary: Fallback summary from RSS feed
 
     Returns:
-        Dictionary containing article text, publish date, authors, and other metadata
+        Dictionary containing extracted article data and metadata
     """
+    start_time = time.time()
+    retry_count = 0
+    
+    # Initialize return data structure
     article_data = {
         "text": "",
         "authors": [],
         "publish_date": None,
-        "top_image": "",
+        "top_image": None,
         "keywords": [],
         "summary": "",
         "error": None,
     }
 
+    # Validate URL first
     if not is_valid_url(url):
-        logger.error(f"Invalid URL: {url}")
-        article_data["error"] = "Invalid URL format"
-        # Use RSS summary as fallback if available
-        if rss_summary:
-            article_data["text"] = normalize_whitespace(rss_summary)
-            article_data["summary"] = (
-                article_data["text"][:200] + "..."
-                if len(article_data["text"]) > 200
-                else article_data["text"]
-            )
-            article_data["error"] = "Using RSS summary as fallback (invalid URL)"
-            logger.info(f"Using RSS summary as fallback for invalid URL: {url}")
+        error_msg = f"Invalid URL format: {url}"
+        logger.warning(error_msg)
+        article_data["error"] = error_msg
+        metrics.record_error('invalid_url', 'unknown')
         return article_data
 
-    # Special handling for Yahoo Finance URLs which often block scrapers
     original_url = url
-    parsed_url = urlparse(url)
-    if "finance.yahoo.com" in parsed_url.netloc:
-        # For Yahoo Finance, we need to clean the URL
-        url = f"https://{parsed_url.netloc}{parsed_url.path}"
-        logger.info(f"Modified Yahoo Finance URL from {original_url} to {url}")
+    logger.info(f"Extracting content from: {url}")
 
     try:
-        # Download with retry mechanism
+        # Download article with retries
         article = download_article(url)
-
+        
         # Parse the article
         article.parse()
 
-        # Extract basic text content
-        article_data["text"] = normalize_whitespace(article.text)
+        # Extract text content
+        if article.text:
+            article_data["text"] = normalize_whitespace(article.text)
 
-        # Get and process authors
+        # Extract metadata
         if article.authors:
-            try:
-                authors_list = list(article.authors)
-                if authors_list and len(authors_list) > 0:
-                    article_data['authors'] = authors_list
-            except Exception as e:
-                logger.warning(f"Failed to extract authors: {e}")
-                
-        # Extract summary if available
-        if hasattr(article, 'summary') and article.summary:
-            try:
-                summary_text = article.summary
-                if summary_text and len(summary_text) > 3:
-                    # Clean up and normalize the summary
-                    article_data['summary'] = normalize_whitespace(summary_text)
-            except Exception as e:
-                logger.warning(f"Failed to extract summary: {e}")
+            article_data["authors"] = article.authors
 
-        # Extract keywords if available
-        if hasattr(article, 'keywords') and article.keywords:
-            try:
-                keywords_list = list(article.keywords)
-                if keywords_list and len(keywords_list) > 0:
-                    article_data['keywords'] = keywords_list
-            except Exception as e:
-                logger.warning(f"Failed to extract keywords: {e}")
-
-        # Extract publish date if available
         if article.publish_date:
             article_data["publish_date"] = article.publish_date
 
-        # Extract top image if available
-        if hasattr(article, 'top_image') and article.top_image:
-            try:
-                image_url = article.top_image
-                if image_url and len(image_url) > 5:  # Basic URL length check
-                    article_data['top_image'] = image_url
-            except Exception as e:
-                logger.warning(f"Failed to extract top image: {e}")
+        if article.top_image:
+            article_data["top_image"] = article.top_image
 
-        # Natural language processing for additional metadata
+        # Try to get keywords and summary (these might fail)
         try:
-            # Skip NLP if text is very short
-            if len(article_data["text"]) > 100:
-                article.nlp()
-                article_data["keywords"] = article.keywords
-                article_data["summary"] = article.summary
-            else:
-                # For short articles, use the text as summary
-                article_data["summary"] = article_data["text"]
-        except Exception as e:
-            logger.warning(f"NLP processing failed for {url}: {e}")
-            # Create a basic summary if NLP fails
-            if article_data["text"]:
+            if hasattr(article, 'nlp') and callable(article.nlp) and NLTK_RESOURCES_AVAILABLE:
+                # Only run NLP if we have substantial content and NLTK resources are available
+                if len(article_data["text"]) > 100:
+                    article.nlp()
+                    if article.keywords:
+                        article_data["keywords"] = article.keywords
+                    if article.summary:
+                        article_data["summary"] = normalize_whitespace(article.summary)
+            elif not NLTK_RESOURCES_AVAILABLE:
+                # Skip NLP processing silently if resources are not available
+                # This prevents spam warnings about missing punkt_tab
+                pass
+        except Exception as nlp_error:
+            # Only log NLP errors if they're not related to missing NLTK resources
+            error_str = str(nlp_error).lower()
+            if "punkt_tab" not in error_str and "punkt" not in error_str:
+                logger.warning(f"NLP processing failed for {url}: {nlp_error}")
+            # Silently skip punkt-related errors to avoid spam
+
+        # If no summary from NLP, create one from the text
+        if not article_data["summary"] and article_data["text"]:
+            if len(article_data["text"]) > 200:
                 article_data["summary"] = (
                     article_data["text"][:200] + "..."
                     if len(article_data["text"]) > 200
@@ -323,14 +338,29 @@ def extract_article_content(url: str, rss_summary: str = "") -> Dict[str, Any]:
                 )
 
         # Log successful extraction
+        duration = time.time() - start_time
+        content_length = len(article_data["text"])
+        
         logger.info(
-            f"Successfully extracted article from {original_url}: {len(article_data['text'])} chars"
+            f"Successfully extracted article from {original_url}: {content_length} chars in {duration:.2f}s"
         )
+        
+        # Record metrics
+        metrics.record_article_extraction(duration, content_length, retry_count)
 
     except Exception as e:
+        duration = time.time() - start_time
         error_msg = str(e)
         logger.error(f"Error extracting content from {url}: {error_msg}")
         article_data["error"] = f"Extraction error: {error_msg}"
+        
+        # Record error metrics
+        if "timeout" in error_msg.lower():
+            metrics.record_error('article_timeout', 'unknown')
+        elif "connection" in error_msg.lower():
+            metrics.record_error('article_connection_error', 'unknown')
+        else:
+            metrics.record_error('article_extraction_error', 'unknown')
 
         # Use RSS summary as fallback if available
         if rss_summary:
@@ -386,6 +416,9 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
     Returns:
         Tuple of (entries_processed, articles_created, errors)
     """
+    start_time = time.time()
+    category = FEED_CATEGORIES.get(feed_url, 'unknown')
+    
     entries_processed = 0
     articles_created = 0
     errors = 0
@@ -402,10 +435,14 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
                 if "link" not in entry:
                     continue
 
-                # Check if article already exists
+                # Check if article already exists (with timing)
+                db_start = time.time()
                 existing_article = crud.get_article_by_url(db, entry["link"])
+                db_duration = time.time() - db_start
+                metrics.record_database_operation('check_duplicate', db_duration)
+                
                 if existing_article:
-                    logger.info(f"Article already exists: {entry['title']}")
+                    logger.debug(f"Article already exists: {entry['title']}")
                     continue
 
                 # Extract content and metadata
@@ -416,9 +453,10 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
                 # Skip if extraction failed
                 if not article_data["text"]:
                     logger.warning(
-                        f"Could not extract content for: {entry['title']} - {article_data['error']}"
+                        f"Could not extract content for: {entry['title']} - {article_data.get('error', 'Unknown error')}"
                     )
                     errors += 1
+                    metrics.record_error('content_extraction_failed', category)
                     continue
 
                 # Use article publish date if available, otherwise use RSS feed date or current time
@@ -427,7 +465,7 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
                 )
 
                 # Create article
-                article_data = schemas.ArticleCreate(
+                article_create_data = schemas.ArticleCreate(
                     source=entry.get("source", feed_url),
                     title=entry.get("title", "No title"),
                     content=article_data["text"],
@@ -444,7 +482,12 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
                     else entry.get("summary", ""),
                 )
 
-                new_article = crud.create_article(db, article_data)
+                # Create article in database (with timing)
+                db_start = time.time()
+                new_article = crud.create_article(db, article_create_data)
+                db_duration = time.time() - db_start
+                metrics.record_database_operation('create_article', db_duration)
+                
                 articles_created += 1
                 logger.info(f"Created new article: {new_article.title}")
 
@@ -453,39 +496,72 @@ def ingest_feed(db: Session, feed_url: str) -> Tuple[int, int, int]:
                     f"Error processing entry {entry.get('title', 'unknown')}: {e}"
                 )
                 errors += 1
+                metrics.record_error('entry_processing_error', category)
+
+        # Record feed processing metrics
+        duration = time.time() - start_time
+        status = 'error' if errors > 0 else 'success'
+        metrics.record_feed_processed(status, category)
+        metrics.record_articles_created(articles_created, category)
+        
+        logger.info(
+            f"Feed {feed_url} processed in {duration:.2f}s: "
+            f"{entries_processed} entries, {articles_created} articles, {errors} errors"
+        )
 
     except Exception as e:
+        duration = time.time() - start_time
         logger.error(f"Error processing RSS feed {feed_url}: {e}")
         errors += 1
+        metrics.record_error('feed_processing_error', category)
+        metrics.record_feed_processed('error', category)
 
     return (entries_processed, articles_created, errors)
 
 
 def ingest_all_feeds(db: Session) -> Dict[str, Any]:
     """
-    Ingest all RSS feeds and return statistics.
+    Ingest all RSS feeds and return comprehensive statistics.
 
     Args:
         db: SQLAlchemy database session
 
     Returns:
-        Dictionary with ingestion statistics
+        Dictionary with detailed ingestion statistics
     """
-    start_time = time.time()
-
+    # Start metrics tracking
+    metrics.start_ingestion_run()
+    
     total_feeds = len(ALL_FEEDS)
     total_entries = 0
     total_articles = 0
     total_errors = 0
     feeds_with_errors = 0
+    feed_results = []
+
+    logger.info(f"Starting ingestion of {total_feeds} RSS feeds")
 
     for feed_url in ALL_FEEDS:
+        feed_start_time = time.time()
+        category = FEED_CATEGORIES.get(feed_url, 'unknown')
+        
         try:
             # Validate feed before attempting to ingest
             is_valid, error_message = validate_feed(feed_url)
             if not is_valid:
                 logger.error(f"Skipping invalid feed {feed_url}: {error_message}")
                 feeds_with_errors += 1
+                metrics.record_feed_processed('invalid', category)
+                feed_results.append({
+                    'url': feed_url,
+                    'category': category,
+                    'status': 'invalid',
+                    'error': error_message,
+                    'entries': 0,
+                    'articles': 0,
+                    'errors': 1,
+                    'duration': time.time() - feed_start_time
+                })
                 continue
 
             entries, articles, errors = ingest_feed(db, feed_url)
@@ -497,21 +573,227 @@ def ingest_all_feeds(db: Session) -> Dict[str, Any]:
             if errors > 0:
                 feeds_with_errors += 1
 
+            feed_duration = time.time() - feed_start_time
+            feed_results.append({
+                'url': feed_url,
+                'category': category,
+                'status': 'success' if errors == 0 else 'partial_success',
+                'entries': entries,
+                'articles': articles,
+                'errors': errors,
+                'duration': feed_duration
+            })
+
         except Exception as e:
+            feed_duration = time.time() - feed_start_time
             logger.error(f"Unexpected error processing feed {feed_url}: {e}")
             feeds_with_errors += 1
+            metrics.record_error('unexpected_feed_error', category)
+            metrics.record_feed_processed('error', category)
+            
+            feed_results.append({
+                'url': feed_url,
+                'category': category,
+                'status': 'error',
+                'error': str(e),
+                'entries': 0,
+                'articles': 0,
+                'errors': 1,
+                'duration': feed_duration
+            })
 
-    end_time = time.time()
-    processing_time = end_time - start_time
+    # Finish metrics tracking
+    final_stats = metrics.finish_ingestion_run(total_feeds)
 
+    # Compile comprehensive statistics
     stats = {
         "total_feeds_processed": total_feeds,
         "feeds_with_errors": feeds_with_errors,
+        "feeds_successful": total_feeds - feeds_with_errors,
         "total_entries_processed": total_entries,
         "articles_created": total_articles,
-        "errors": total_errors,
-        "processing_time_seconds": processing_time,
+        "total_errors": total_errors,
+        "processing_time_seconds": final_stats.get('duration', 0),
+        "success_rate": (total_feeds - feeds_with_errors) / total_feeds if total_feeds > 0 else 0,
+        "articles_per_feed": total_articles / total_feeds if total_feeds > 0 else 0,
+        "feed_results": feed_results,
+        "error_breakdown": final_stats.get('error_breakdown', {}),
+        "timestamp": datetime.utcnow().isoformat()
     }
 
-    logger.info(f"RSS ingestion complete. Stats: {stats}")
+    logger.info(f"RSS ingestion complete. Comprehensive stats: {stats}")
     return stats
+
+
+def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
+    """
+    Ingest all RSS feeds and check for alert triggers based on sentiment.
+    
+    This function performs the full ingestion process and then checks
+    if any sentiment scores cross user-defined alert thresholds.
+    
+    Args:
+        db: SQLAlchemy database session
+        
+    Returns:
+        Dictionary with ingestion stats and alert information
+    """
+    logger.info("Starting RSS ingestion with alert checking")
+    
+    # Step 1: Perform normal RSS ingestion
+    ingestion_stats = ingest_all_feeds(db)
+    
+    # Step 2: Check for alert triggers if articles were created
+    alert_stats = {
+        "alerts_checked": 0,
+        "alerts_triggered": 0,
+        "triggered_alert_ids": [],
+        "asset_scores": {}
+    }
+    
+    if ingestion_stats["articles_created"] > 0:
+        try:
+            logger.info("Checking for alert triggers after ingestion")
+            
+            # Get all assets that have recent sentiment data
+            from .nlp.sentiment_analysis import analyze_sentiment
+            
+            # Get recently created articles (from this ingestion run)
+            recent_articles = (
+                db.query(models.Article)
+                .filter(models.Article.published_at >= datetime.utcnow() - timedelta(hours=2))
+                .order_by(models.Article.published_at.desc())
+                .limit(100)  # Limit to recent articles
+                .all()
+            )
+            
+            # Analyze sentiment for articles that don't have sentiment data yet
+            for article in recent_articles:
+                try:
+                    # Check if sentiment already exists
+                    existing_sentiment = crud.get_sentiments_by_article(db, article.id)
+                    if existing_sentiment:
+                        continue
+                    
+                    # Analyze sentiment for new article
+                    sentiment_result = analyze_sentiment(article.content)
+                    
+                    # Create sentiment record
+                    sentiment_data = schemas.SentimentCreate(
+                        article_id=article.id,
+                        lexicon_score=sentiment_result.get("lexicon_score"),
+                        finbert_score=sentiment_result.get("finbert_score")
+                    )
+                    
+                    crud.create_sentiment(db, sentiment_data)
+                    
+                except Exception as e:
+                    logger.error(f"Error analyzing sentiment for article {article.id}: {e}")
+                    continue
+            
+            # Get latest sentiment scores for each asset
+            asset_symbols = ["AAPL", "MSFT", "BTC", "ETH", "EUR/USD", "GOLD"]  # Common assets
+            
+            for symbol in asset_symbols:
+                try:
+                    # Get latest sentiment for this asset
+                    latest_sentiment = crud.get_latest_sentiment_by_asset_symbol(db, symbol)
+                    
+                    if latest_sentiment and latest_sentiment.finbert_score is not None:
+                        sentiment_score = latest_sentiment.finbert_score
+                        alert_stats["asset_scores"][symbol] = sentiment_score
+                        
+                        # Check for alert triggers
+                        triggered_ids = crud.check_and_trigger_alerts(db, symbol, sentiment_score)
+                        
+                        if triggered_ids:
+                            alert_stats["alerts_triggered"] += len(triggered_ids)
+                            alert_stats["triggered_alert_ids"].extend(triggered_ids)
+                            logger.info(f"Triggered {len(triggered_ids)} alerts for {symbol} (score: {sentiment_score:.3f})")
+                        
+                        alert_stats["alerts_checked"] += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error checking alerts for {symbol}: {e}")
+                    continue
+            
+            logger.info(f"Alert checking complete: {alert_stats['alerts_triggered']} alerts triggered")
+            
+        except Exception as e:
+            logger.error(f"Error during alert checking: {e}")
+            alert_stats["error"] = str(e)
+    
+    # Combine stats
+    combined_stats = {
+        **ingestion_stats,
+        "alert_checking": alert_stats,
+        "process_type": "ingestion_with_alerts"
+    }
+    
+    return combined_stats
+
+
+def process_asset_sentiment_alerts(db: Session, asset_symbol: str, sentiment_score: float) -> Dict[str, Any]:
+    """
+    Process alerts for a specific asset and sentiment score.
+    
+    This function can be called directly to test alert triggering
+    or as part of the ingestion process.
+    
+    Args:
+        db: Database session
+        asset_symbol: Symbol of the asset (e.g., 'AAPL', 'BTC')
+        sentiment_score: Current sentiment score (-1.0 to 1.0)
+        
+    Returns:
+        Dictionary with alert processing results
+    """
+    from . import crud
+    
+    try:
+        logger.info(f"Processing alerts for {asset_symbol} with sentiment score {sentiment_score:.3f}")
+        
+        # Check and trigger alerts
+        triggered_alert_ids = crud.check_and_trigger_alerts(db, asset_symbol, sentiment_score)
+        
+        # Get details of triggered alerts
+        triggered_alerts = []
+        for alert_id in triggered_alert_ids:
+            alert = crud.get_alert(db, alert_id)
+            if alert:
+                triggered_alerts.append({
+                    "alert_id": str(alert_id),
+                    "user_id": str(alert.user_id),
+                    "threshold": alert.threshold,
+                    "direction": alert.direction,
+                    "triggered_at": alert.triggered_at.isoformat() if alert.triggered_at else None
+                })
+        
+        result = {
+            "asset_symbol": asset_symbol,
+            "sentiment_score": sentiment_score,
+            "alerts_triggered": len(triggered_alert_ids),
+            "triggered_alerts": triggered_alerts,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        if triggered_alert_ids:
+            logger.info(f"Successfully triggered {len(triggered_alert_ids)} alerts for {asset_symbol}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing alerts for {asset_symbol}: {e}")
+        return {
+            "asset_symbol": asset_symbol,
+            "sentiment_score": sentiment_score,
+            "alerts_triggered": 0,
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+
+# Additional imports needed for alert functionality
+from . import models, schemas
+from datetime import datetime, timedelta
+ 
