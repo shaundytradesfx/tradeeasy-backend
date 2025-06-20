@@ -1,0 +1,165 @@
+{
+  "test_summary": {
+    "start_time": "2025-06-08T00:24:52.712900",
+    "end_time": "2025-06-08T00:34:50.735839",
+    "total_duration": "0:09:58.022939",
+    "test_target": "http://localhost:8000"
+  },
+  "time_range_performance": {
+    "test_name": "time_range_performance",
+    "ranges": {
+      "1h": {
+        "time_range": "1h",
+        "total_requests": 4,
+        "successful_requests": 0,
+        "failed_requests": 4,
+        "response_times": [],
+        "avg_data_points": 0,
+        "total_data_points": 0
+      },
+      "24h": {
+        "time_range": "24h",
+        "total_requests": 4,
+        "successful_requests": 0,
+        "failed_requests": 4,
+        "response_times": [],
+        "avg_data_points": 0,
+        "total_data_points": 0
+      },
+      "7d": {
+        "time_range": "7d",
+        "total_requests": 4,
+        "successful_requests": 0,
+        "failed_requests": 4,
+        "response_times": [],
+        "avg_data_points": 0,
+        "total_data_points": 0
+      },
+      "30d": {
+        "time_range": "30d",
+        "total_requests": 4,
+        "successful_requests": 0,
+        "failed_requests": 4,
+        "response_times": [],
+        "avg_data_points": 0,
+        "total_data_points": 0
+      }
+    }
+  },
+  "asset_category_performance": {
+    "test_name": "asset_category_performance",
+    "categories": {
+      "cryptocurrencies": {
+        "category": "cryptocurrencies",
+        "assets_tested": 6,
+        "total_requests": 6,
+        "successful_requests": 0,
+        "failed_requests": 6,
+        "response_times": [],
+        "assets_with_data": 0,
+        "assets_without_data": 0
+      },
+      "stocks": {
+        "category": "stocks",
+        "assets_tested": 6,
+        "total_requests": 6,
+        "successful_requests": 0,
+        "failed_requests": 6,
+        "response_times": [],
+        "assets_with_data": 0,
+        "assets_without_data": 0
+      },
+      "forex": {
+        "category": "forex",
+        "assets_tested": 5,
+        "total_requests": 5,
+        "successful_requests": 0,
+        "failed_requests": 5,
+        "response_times": [],
+        "assets_with_data": 0,
+        "assets_without_data": 0
+      },
+      "commodities": {
+        "category": "commodities",
+        "assets_tested": 5,
+        "total_requests": 5,
+        "successful_requests": 0,
+        "failed_requests": 5,
+        "response_times": [],
+        "assets_with_data": 0,
+        "assets_without_data": 0
+      }
+    }
+  },
+  "custom_date_ranges": {
+    "test_name": "custom_date_ranges",
+    "scenarios": [
+      {
+        "scenario_name": "last_3_days",
+        "start_date": "2025-06-04T20:28:19.953499",
+        "end_date": "2025-06-07T20:28:19.953499",
+        "response_time": 25928.3127784729,
+        "success": false,
+        "data_points": 0
+      },
+      {
+        "scenario_name": "last_week_specific",
+        "start_date": "2025-05-31T20:28:19.953499",
+        "end_date": "2025-06-06T20:28:19.953499",
+        "response_time": 25914.337635040283,
+        "success": false,
+        "data_points": 0
+      },
+      {
+        "scenario_name": "last_month",
+        "start_date": "2025-05-08T20:28:19.953499",
+        "end_date": "2025-06-07T20:28:19.953499",
+        "response_time": 25915.004014968872,
+        "success": false,
+        "data_points": 0
+      },
+      {
+        "scenario_name": "specific_week",
+        "start_date": "2025-05-24T20:28:19.953499",
+        "end_date": "2025-05-31T20:28:19.953499",
+        "response_time": 25909.90900993347,
+        "success": false,
+        "data_points": 0
+      }
+    ]
+  },
+  "concurrent_load_test": {
+    "test_name": "concurrent_history_load",
+    "concurrent_users": 20,
+    "requests_per_user": 10,
+    "total_requests": 200,
+    "successful_requests": 0,
+    "failed_requests": 200,
+    "success_rate": 0.0,
+    "avg_response_time": 0,
+    "max_response_time": 0,
+    "total_data_points": 0
+  },
+  "latest_sentiment_performance": {
+    "test_name": "latest_sentiment_performance",
+    "total_assets_tested": 22,
+    "successful_requests": 0,
+    "failed_requests": 22,
+    "response_times": [],
+    "assets_with_data": 0,
+    "assets_without_data": 0
+  },
+  "performance_summary": {
+    "overall_success_rate": 0.0,
+    "total_requests": 260,
+    "successful_requests": 0,
+    "failed_requests": 260,
+    "recommendations": [
+      "Success rate < 95% - review error handling and data availability",
+      "Low data availability for cryptocurrencies (0.0%)",
+      "Low data availability for stocks (0.0%)",
+      "Low data availability for forex (0.0%)",
+      "Low data availability for commodities (0.0%)"
+    ]
+  }
+}

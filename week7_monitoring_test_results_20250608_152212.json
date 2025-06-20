@@ -1,0 +1,103 @@
+{
+  "prometheus_server": {
+    "Prometheus Server Enabled": {
+      "success": true,
+      "details": "start_http_server(8001) is active",
+      "timestamp": "2025-06-08T15:22:12.217779"
+    },
+    "Prometheus Import": {
+      "success": true,
+      "details": "prometheus_client imported correctly",
+      "timestamp": "2025-06-08T15:22:12.217822"
+    },
+    "Prometheus Config": {
+      "success": true,
+      "details": "Found 3 TradeEasy scrape jobs",
+      "timestamp": "2025-06-08T15:22:12.412470"
+    },
+    "Grafana prometheus.yml": {
+      "success": true,
+      "details": "Configuration file exists and valid",
+      "timestamp": "2025-06-08T15:22:12.430941"
+    }
+  },
+  "metrics_collection": {
+    "Metrics Server (8001)": {
+      "success": true,
+      "details": "TradeEasy metrics available",
+      "timestamp": "2025-06-08T15:22:12.399242"
+    },
+    "API Metrics Endpoint": {
+      "success": true,
+      "details": "Metrics endpoint responding",
+      "timestamp": "2025-06-08T15:22:12.405419"
+    }
+  },
+  "grafana_config": {
+    "Grafana dashboard.yml": {
+      "success": true,
+      "details": "Configuration file exists and valid",
+      "timestamp": "2025-06-08T15:22:12.433327"
+    },
+    "Grafana Dashboard": {
+      "success": true,
+      "details": "Dashboard with 5 panels configured",
+      "timestamp": "2025-06-08T15:22:12.435086"
+    }
+  },
+  "alerting_rules": {
+    "Alerting Rules": {
+      "success": true,
+      "details": "7 alerting rules configured",
+      "timestamp": "2025-06-08T15:22:12.420801"
+    },
+    "Alertmanager Receivers": {
+      "success": true,
+      "details": "3 receivers configured",
+      "timestamp": "2025-06-08T15:22:12.441293"
+    },
+    "Alertmanager Routes": {
+      "success": true,
+      "details": "2 routes configured",
+      "timestamp": "2025-06-08T15:22:12.441313"
+    }
+  },
+  "integration_tests": {
+    "Rule Files Config": {
+      "success": true,
+      "details": "tradeeasy_rules.yml configured",
+      "timestamp": "2025-06-08T15:22:12.412493"
+    },
+    "Docker Compose": {
+      "success": true,
+      "details": "Grafana and Prometheus services configured",
+      "timestamp": "2025-06-08T15:22:12.427921"
+    },
+    "Backend Health": {
+      "success": true,
+      "details": "Backend is healthy",
+      "timestamp": "2025-06-08T15:22:12.456514"
+    },
+    "Backend Features": {
+      "success": true,
+      "details": "Core features available",
+      "timestamp": "2025-06-08T15:22:12.458403"
+    },
+    "Configuration Files": {
+      "success": true,
+      "details": "All monitoring configuration files present",
+      "timestamp": "2025-06-08T15:22:12.460687"
+    },
+    "Docker Compose Validation": {
+      "success": true,
+      "details": "Configuration is valid",
+      "timestamp": "2025-06-08T15:22:12.763440"
+    }
+  },
+  "summary": {
+    "total_tests": 17,
+    "passed_tests": 17,
+    "success_rate": 100.0,
+    "timestamp": "2025-06-08T15:22:12.764128"
+  }
+}

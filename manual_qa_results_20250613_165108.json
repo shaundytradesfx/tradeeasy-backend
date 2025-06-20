@@ -1,0 +1,58 @@
+[
+  {
+    "test_id": "ETC-SENT-001-1",
+    "test_name": "Empty Content",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.284019"
+  },
+  {
+    "test_id": "ETC-SENT-001-2",
+    "test_name": "Single Character",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.286664"
+  },
+  {
+    "test_id": "ETC-SENT-001-3",
+    "test_name": "Only Whitespace",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.291178"
+  },
+  {
+    "test_id": "ETC-SENT-001-4",
+    "test_name": "Only Punctuation",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.295349"
+  },
+  {
+    "test_id": "ETC-SENT-001-5",
+    "test_name": "Extremely Long Content",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.299490"
+  },
+  {
+    "test_id": "ETC-SENT-001-6",
+    "test_name": "Unicode and Emojis",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.303375"
+  },
+  {
+    "test_id": "ETC-SENT-001-7",
+    "test_name": "HTML Entities",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.307656"
+  },
+  {
+    "test_id": "ETC-SENT-001-8",
+    "test_name": "Mixed Languages",
+    "status": "FAIL",
+    "details": "Unexpected status code: 404",
+    "timestamp": "2025-06-13T16:51:08.311536"
+  }
+]

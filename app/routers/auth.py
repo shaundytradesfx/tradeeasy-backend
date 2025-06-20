@@ -1,15 +1,15 @@
 """
 Authentication API endpoints for TradeEasy backend.
 
-Provides login/logout functionality with demo user support.
+Provides login/logout functionality with JWT authentication.
 """
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import schemas
-from ..auth import authenticate_demo_user, login_demo_user, create_demo_assets_if_not_exist
+from .. import schemas, models
+from ..auth import authenticate_user, create_access_token, create_demo_assets_if_not_exist, get_current_user
 from ..database import get_db
 
 # Set up logging
@@ -30,15 +30,15 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """
-    Authenticate user and return access token.
+    Authenticate user and return JWT access token.
     
     For demo purposes, supports username='demo' and password='demo123'.
     """
     try:
-        # Authenticate user
-        user_data = authenticate_demo_user(login_request.username, login_request.password)
+        # Authenticate user with new JWT system
+        user = authenticate_user(db, login_request.username, login_request.password)
         
-        if not user_data:
+        if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid username or password",
@@ -48,16 +48,18 @@ async def login(
         # Create demo assets if they don't exist
         create_demo_assets_if_not_exist(db)
         
-        # Generate token and return response
-        token_data = login_demo_user()
+        # Generate JWT token
+        access_token = create_access_token(
+            data={"sub": str(user.id), "username": user.username}
+        )
         
         logger.info(f"User {login_request.username} logged in successfully")
         
         return schemas.LoginResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            user_id=token_data["user_id"],
-            username=token_data["username"]
+            access_token=access_token,
+            token_type="bearer",
+            user_id=str(user.id),
+            username=user.username
         )
         
     except HTTPException:
@@ -73,9 +75,10 @@ async def login(
 @router.post("/logout")
 async def logout():
     """
-    Logout user (for demo purposes, just returns success message).
+    Logout user.
     
-    In a real implementation, this would invalidate the token.
+    Note: With JWT tokens, logout is typically handled client-side by discarding the token.
+    In a production system, you might implement token blacklisting.
     """
     return {"message": "Logged out successfully"}
 
@@ -91,16 +94,26 @@ async def demo_login(db: Session = Depends(get_db)):
         # Create demo assets if they don't exist
         create_demo_assets_if_not_exist(db)
         
-        # Generate token for demo user
-        token_data = login_demo_user()
+        # Authenticate demo user
+        demo_user = authenticate_user(db, "demo", "demo123")
+        if not demo_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Demo user authentication failed"
+            )
+        
+        # Generate JWT token for demo user
+        access_token = create_access_token(
+            data={"sub": str(demo_user.id), "username": demo_user.username}
+        )
         
         logger.info("Demo user logged in via quick login")
         
         return schemas.LoginResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            user_id=token_data["user_id"],
-            username=token_data["username"]
+            access_token=access_token,
+            token_type="bearer",
+            user_id=str(demo_user.id),
+            username=demo_user.username
         )
         
     except Exception as e:
@@ -115,7 +128,9 @@ async def demo_login(db: Session = Depends(get_db)):
 async def auth_status():
     """Get authentication system status."""
     return {
-        "auth_type": "demo",
+        "auth_type": "JWT",
+        "algorithm": "HS256",
+        "token_expiry_minutes": 1440,  # 24 hours
         "demo_user_available": True,
         "demo_credentials": {
             "username": "demo",
@@ -125,5 +140,45 @@ async def auth_status():
             "login": "/api/auth/login",
             "logout": "/api/auth/logout",
             "demo_login": "/api/auth/demo-login"
+        },
+        "security_features": [
+            "JWT tokens",
+            "bcrypt password hashing",
+            "Token expiration",
+            "Bearer token authentication"
+        ]
+    }
+
+
+@router.post("/admin/create-indexes")
+async def create_database_indexes(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create performance indexes on the database.
+    
+    This endpoint is useful for upgrading existing databases with performance indexes.
+    Requires authentication.
+    """
+    try:
+        from ..database import create_performance_indexes
+        
+        # Create indexes using the database engine
+        created_count = create_performance_indexes(db.bind)
+        
+        logger.info(f"User {current_user.username} triggered index creation: {created_count} indexes created")
+        
+        return {
+            "message": "Database index creation completed",
+            "indexes_created": created_count,
+            "user": current_user.username,
+            "status": "success"
         }
-    } 
+        
+    except Exception as e:
+        logger.error(f"Database index creation failed for user {current_user.username}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create database indexes: {str(e)}"
+        ) 

@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 
-# Loughran-McDonald Positive Words (subset for demonstration)
+# Loughran-McDonald Positive Words (expanded for better coverage)
 POSITIVE_WORDS = {
     "able", "abundance", "abundant", "acclaimed", "accomplish", "accomplished", 
     "achievement", "achievements", "achieves", "achieving", "acknowledge", 
@@ -34,10 +34,28 @@ POSITIVE_WORDS = {
     "beneficial", "beneficially", "benefit", "benefited", "benefiting", 
     "benefits", "best", "better", "bolster", "bolstered", "bolstering", 
     "bolsters", "boom", "booming", "boost", "boosted", "boosting", "boosts", 
-    "breakthrough", "breakthroughs", "bright", "brilliant", "bullish"
+    "breakthrough", "breakthroughs", "bright", "brilliant", "bullish",
+    # Additional common positive financial words
+    "excellent", "outstanding", "strong", "growth", "profit", "profits", 
+    "profitable", "profitability", "gain", "gains", "gained", "gaining",
+    "increase", "increased", "increasing", "increases", "rise", "rising", 
+    "rose", "risen", "up", "upward", "upwards", "higher", "high", "peak",
+    "record", "success", "successful", "successfully", "win", "winning", 
+    "winner", "wins", "won", "positive", "optimistic", "confidence", 
+    "confident", "strength", "strengthen", "strengthened", "strengthening",
+    "improve", "improved", "improvement", "improvements", "improving", 
+    "improves", "upgrade", "upgraded", "upgrading", "upgrades", "expand", 
+    "expanded", "expanding", "expansion", "expansions", "expands", "grow", 
+    "growing", "grew", "grown", "grows", "recovery", "recover", "recovered", 
+    "recovering", "recovers", "rebound", "rebounded", "rebounding", "rebounds",
+    "surge", "surged", "surging", "surges", "rally", "rallied", "rallying", 
+    "rallies", "momentum", "accelerate", "accelerated", "accelerating", 
+    "accelerates", "acceleration", "outperform", "outperformed", "outperforming", 
+    "outperforms", "exceed", "exceeded", "exceeding", "exceeds", "beat", 
+    "beats", "beating", "solid", "robust", "healthy", "stable", "stability"
 }
 
-# Loughran-McDonald Negative Words (subset for demonstration)
+# Loughran-McDonald Negative Words (expanded for better coverage)
 NEGATIVE_WORDS = {
     "abandon", "abandoned", "abandoning", "abandonment", "abandons", "abdicated", 
     "abdication", "aberrant", "aberration", "aberrations", "abetting", "abnormal", 
@@ -59,7 +77,31 @@ NEGATIVE_WORDS = {
     "bankruptcy", "bankruptcies", "bear", "bearish", "bears", "blame", 
     "blamed", "blames", "blaming", "breach", "breached", "breaches", 
     "breaching", "break", "breakdown", "breakdowns", "breaking", "breaks", 
-    "broken", "burden", "burdened", "burdening", "burdens", "burdensome"
+    "broken", "burden", "burdened", "burdening", "burdens", "burdensome",
+    # Additional common negative financial words
+    "loss", "losses", "lose", "losing", "lost", "decline", "declined", 
+    "declining", "declines", "decrease", "decreased", "decreasing", "decreases",
+    "fall", "falling", "fell", "fallen", "falls", "drop", "dropped", "dropping", 
+    "drops", "down", "downward", "downwards", "lower", "low", "weak", "weakness", 
+    "weaken", "weakened", "weakening", "weakens", "poor", "poorly", "worse", 
+    "worst", "worsen", "worsened", "worsening", "worsens", "deteriorate", 
+    "deteriorated", "deteriorating", "deteriorates", "deterioration", "fail", 
+    "failed", "failing", "fails", "failure", "failures", "miss", "missed", 
+    "missing", "misses", "disappoint", "disappointed", "disappointing", 
+    "disappoints", "disappointment", "disappointments", "concern", "concerned", 
+    "concerning", "concerns", "worry", "worried", "worrying", "worries", 
+    "fear", "feared", "fearing", "fears", "fearful", "risk", "risks", "risky", 
+    "riskier", "riskiest", "threat", "threats", "threaten", "threatened", 
+    "threatening", "threatens", "crisis", "crises", "problem", "problems", 
+    "problematic", "trouble", "troubled", "troubling", "troubles", "difficult", 
+    "difficulties", "difficulty", "challenge", "challenged", "challenging", 
+    "challenges", "struggle", "struggled", "struggling", "struggles", "severe", 
+    "severely", "serious", "seriously", "critical", "critically", "terrible", 
+    "terribly", "horrible", "horribly", "awful", "awfully", "negative", 
+    "negatively", "pessimistic", "pessimism", "doubt", "doubts", "doubtful", 
+    "uncertain", "uncertainty", "unstable", "instability", "volatile", 
+    "volatility", "crash", "crashed", "crashing", "crashes", "plunge", 
+    "plunged", "plunging", "plunges", "slump", "slumped", "slumping", "slumps"
 }
 
 

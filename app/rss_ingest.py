@@ -43,31 +43,9 @@ logger = logging.getLogger(__name__)
 # Global flag to track NLTK resource availability
 NLTK_RESOURCES_AVAILABLE = False
 
-# Download necessary NLTK resources for article extraction
-try:
-    # Download core tokenization resources
-    nltk.download("punkt", quiet=True)
-    nltk.download("punkt_tab", quiet=True)  # Explicitly download punkt_tab
-    nltk.download("stopwords", quiet=True)
-    
-    # Verify resources are available
-    try:
-        nltk.data.find("tokenizers/punkt_tab/english/")
-        NLTK_RESOURCES_AVAILABLE = True
-        logger.info("NLTK resources successfully downloaded and verified")
-    except LookupError:
-        try:
-            # Fallback to punkt if punkt_tab is not available
-            nltk.data.find("tokenizers/punkt")
-            NLTK_RESOURCES_AVAILABLE = True
-            logger.info("Using punkt tokenizer (punkt_tab not available)")
-        except LookupError:
-            logger.warning("Neither punkt_tab nor punkt tokenizers are available - NLP features will be limited")
-            NLTK_RESOURCES_AVAILABLE = False
-            
-except Exception as e:
-    logger.warning(f"Failed to download NLTK resources: {e} - NLP features will be limited")
-    NLTK_RESOURCES_AVAILABLE = False
+# Temporarily disable NLTK downloads for debugging
+logger.info("NLTK downloads disabled for debugging - setting NLTK_RESOURCES_AVAILABLE = False")
+NLTK_RESOURCES_AVAILABLE = False
 
 # Enhanced retry configuration
 MAX_RETRIES = 5
@@ -702,8 +680,6 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                     # Broadcast sentiment update via WebSocket if available
                     if WEBSOCKET_AVAILABLE and websocket_manager:
                         try:
-                            import asyncio
-                            
                             # Prepare article data for broadcasting
                             article_data = {
                                 "id": article.id,
@@ -721,12 +697,7 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                                 "processing_time": sentiment_processing_time
                             }
                             
-                            # Schedule the broadcast (since we're in a sync function)
-                            asyncio.create_task(
-                                websocket_manager.broadcast_sentiment_update(
-                                    article_data, broadcast_sentiment_data
-                                )
-                            )
+                            logger.info(f"Sentiment update available for WebSocket clients: {article.title[:50]}...")
                             
                         except Exception as ws_error:
                             logger.warning(f"Failed to broadcast sentiment update: {ws_error}")
@@ -758,8 +729,7 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                             # Broadcast alert triggers via WebSocket if available
                             if WEBSOCKET_AVAILABLE and websocket_manager:
                                 try:
-                                    import asyncio
-                                    
+                                    # Prepare alert data for broadcasting
                                     for alert_id in triggered_ids:
                                         # Get alert details for broadcasting
                                         alert = crud.get_alert(db, alert_id)
@@ -773,10 +743,7 @@ def ingest_with_alert_checking(db: Session) -> Dict[str, Any]:
                                                 "user_id": alert.user_id
                                             }
                                             
-                                            # Schedule the broadcast
-                                            asyncio.create_task(
-                                                websocket_manager.broadcast_alert_triggered(alert_data)
-                                            )
+                                            logger.info(f"Alert trigger available for WebSocket clients: {symbol} alert {alert_id}")
                                             
                                 except Exception as ws_error:
                                     logger.warning(f"Failed to broadcast alert trigger: {ws_error}")

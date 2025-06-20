@@ -10,10 +10,11 @@ from prometheus_client import start_http_server
 
 from .database import engine, SessionLocal
 from .models import Base
-from .routers import ingestion, sentiment, search, watchlist, alerts, auth
+from .routers import ingestion, sentiment, search, watchlist, alerts, auth, performance
 from .rss_ingest import ingest_all_feeds, ingest_with_alert_checking
 from .metrics import metrics
 from .websocket_manager import websocket_manager
+from .security import RateLimitMiddleware, SecurityHeadersMiddleware
 from . import crud
 
 # Set up logging
@@ -90,6 +91,21 @@ async def scheduled_alert_maintenance():
         logger.error(f"Error in scheduled alert maintenance: {e}")
 
 
+def create_hourly_sentiment_aggregates():
+    """Create hourly sentiment aggregates manually (for testing)."""
+    try:
+        db = SessionLocal()
+        try:
+            created_aggregates = crud.compute_hourly_sentiment_averages(db)
+            logger.info(f"Manually created {len(created_aggregates)} hourly sentiment aggregates")
+            return len(created_aggregates)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error creating hourly aggregates: {e}")
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
@@ -108,6 +124,7 @@ async def lifespan(app: FastAPI):
         logger.info("Prometheus metrics server started on port 8001")
     except Exception as e:
         logger.warning(f"Failed to start Prometheus server: {e}")
+    # logger.info("Prometheus metrics server disabled for debugging")
     
     # Initialize and start scheduler
     scheduler = AsyncIOScheduler()
@@ -162,10 +179,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add security middleware (order matters - add before routers)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, enabled=True)
+
 # Include routers - organized by functionality
 app.include_router(auth.router)  # Authentication endpoints
 app.include_router(watchlist.router)  # Watchlist endpoints  
 app.include_router(alerts.router)  # Alert endpoints
+app.include_router(performance.router)  # Performance endpoints
 app.include_router(ingestion.router, prefix="/ingestion", tags=["ingestion"])
 app.include_router(sentiment.router, prefix="/api/sentiment", tags=["sentiment"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])

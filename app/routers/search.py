@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..schemas import SearchResponse, ArticleWithSentiment, Article, Sentiment
+from ..security import sanitize_search_query, SecurityError, log_security_event
 from .. import crud
 
 router = APIRouter(
-    prefix="/search",
     tags=["search"],
     responses={404: {"description": "Not found"}},
 )
@@ -48,15 +48,21 @@ async def search_articles(
         HTTPException: 500 if there's an internal server error
     """
     try:
-        # Validate query
+        # Validate and sanitize query input
         if not q or not q.strip():
             raise HTTPException(status_code=400, detail="Search query cannot be empty")
         
+        try:
+            sanitized_query = sanitize_search_query(q)
+        except SecurityError as e:
+            log_security_event("invalid_search_query", {"query": q, "error": str(e)})
+            raise HTTPException(status_code=400, detail=f"Invalid search query: {str(e)}")
+        
         # Get search results with sentiment data
-        search_results = crud.search_articles_with_sentiment(db, q.strip(), skip, limit)
+        search_results = crud.search_articles_with_sentiment(db, sanitized_query, skip, limit)
         
         # Get total count for pagination
-        total_count = crud.count_search_results(db, q.strip())
+        total_count = crud.count_search_results(db, sanitized_query)
         
         # Convert to response format
         results = []
@@ -95,7 +101,7 @@ async def search_articles(
         return SearchResponse(
             results=results,
             total_count=total_count,
-            query=q.strip(),
+            query=sanitized_query,
             skip=skip,
             limit=limit,
             has_more=has_more
@@ -138,12 +144,18 @@ async def search_articles_only(
         HTTPException: 500 if there's an internal server error
     """
     try:
-        # Validate query
+        # Validate and sanitize query input
         if not q or not q.strip():
             raise HTTPException(status_code=400, detail="Search query cannot be empty")
         
+        try:
+            sanitized_query = sanitize_search_query(q)
+        except SecurityError as e:
+            log_security_event("invalid_search_query", {"query": q, "error": str(e)})
+            raise HTTPException(status_code=400, detail=f"Invalid search query: {str(e)}")
+        
         # Get search results
-        articles = crud.search_articles(db, q.strip(), skip, limit)
+        articles = crud.search_articles(db, sanitized_query, skip, limit)
         
         # Convert to response format
         results = []

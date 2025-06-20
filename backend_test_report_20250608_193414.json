@@ -1,0 +1,118 @@
+{
+  "summary": {
+    "total_tests": 21,
+    "passed_tests": 20,
+    "success_rate": 95.23809523809523,
+    "duration": 9.864798
+  },
+  "results": {
+    "Basic Health & Status": {
+      "health_endpoint": {
+        "status": "PASS",
+        "response_time": 0.017044,
+        "data": {
+          "status": "ok"
+        }
+      },
+      "status_endpoint": {
+        "status": "PASS",
+        "response_time": 0.001524
+      },
+      "api_docs": {
+        "status": "PASS"
+      }
+    },
+    "Authentication System": {
+      "demo_login": {
+        "status": "PASS",
+        "token_received": true
+      },
+      "protected_access": {
+        "status": "PASS",
+        "status_code": 200
+      }
+    },
+    "Sentiment Analysis": {
+      "sentiment_test_1": {
+        "status": "FAIL",
+        "error": ""
+      },
+      "sentiment_test_2": {
+        "status": "PASS",
+        "lexicon_score": -0.4,
+        "finbert_score": -0.6804974973201752
+      },
+      "sentiment_test_3": {
+        "status": "PASS",
+        "lexicon_score": 0.3333333333333333,
+        "finbert_score": 0.13898491859436035
+      }
+    },
+    "Search Functionality": {
+      "search_1": {
+        "status": "PASS",
+        "query": "Bitcoin",
+        "results_count": 0
+      },
+      "search_2": {
+        "status": "PASS",
+        "query": "Apple",
+        "results_count": 0
+      },
+      "search_3": {
+        "status": "PASS",
+        "query": "market",
+        "results_count": 0
+      }
+    },
+    "History & Analytics": {
+      "history_BTC": {
+        "status": "PASS",
+        "status_code": 200
+      },
+      "history_AAPL": {
+        "status": "PASS",
+        "status_code": 200
+      }
+    },
+    "Watchlist & Alerts": {
+      "get_watchlists": {
+        "status": "PASS",
+        "status_code": 200
+      },
+      "get_alerts": {
+        "status": "PASS",
+        "status_code": 200
+      }
+    },
+    "WebSocket & Real-time": {
+      "websocket_stats": {
+        "status": "PASS",
+        "status_code": 200
+      },
+      "websocket_broadcast": {
+        "status": "PASS",
+        "status_code": 200
+      }
+    },
+    "Performance & Monitoring": {
+      "metrics_endpoint": {
+        "status": "PASS",
+        "has_tradeeasy_metrics": true
+      },
+      "prometheus_server": {
+        "status": "PASS"
+      }
+    },
+    "Edge Cases": {
+      "invalid_endpoint": {
+        "status": "PASS",
+        "status_code": 404
+      },
+      "malformed_request": {
+        "status": "PASS",
+        "status_code": 422
+      }
+    }
+  }
+}

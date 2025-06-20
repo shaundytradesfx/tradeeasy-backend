@@ -1,8 +1,8 @@
 """
-Simple authentication system for TradeEasy backend.
+JWT-based authentication system for TradeEasy backend.
 
-Provides basic authentication with JWT tokens and demo user support
-for development and testing purposes.
+Provides secure JWT authentication with proper password hashing
+and token validation for production use.
 """
 
 import uuid
@@ -13,26 +13,24 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
-import hashlib
 import logging
+
+# JWT and password hashing imports
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from . import crud, models, schemas
 from .database import get_db
 
-# Simple in-memory store for demo purposes
-# In production, use a proper JWT library and secure key management
-DEMO_USERS = {
-    "demo": {
-        "id": "550e8400-e29b-41d4-a716-446655440000",  # Fixed UUID for demo user
-        "username": "demo",
-        "email": "demo@tradeeasy.com",
-        "password_hash": "demo_hash",  # Simple hash for demo
-    }
-}
+# JWT settings
+SECRET_KEY = "your-secret-key-change-this-in-production"  # In production, use environment variable
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
-# Simple token store (in production, use JWT with proper signing)
-ACTIVE_TOKENS: Dict[str, Dict[str, Any]] = {}
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Security scheme
 security = HTTPBearer(auto_error=False)
 
 logger = logging.getLogger(__name__)
@@ -41,6 +39,48 @@ logger = logging.getLogger(__name__)
 class AuthenticationError(Exception):
     """Custom exception for authentication errors."""
     pass
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plain password against a hashed password."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """Hash a password for storing in the database."""
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def verify_token(token: str) -> Optional[Dict[str, Any]]:
+    """Verify and decode a JWT token."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        username: str = payload.get("username")
+        
+        if user_id is None:
+            return None
+            
+        return {
+            "user_id": user_id,
+            "username": username,
+            "exp": payload.get("exp")
+        }
+    except JWTError:
+        return None
 
 
 def create_demo_user_if_not_exists(db: Session) -> models.User:
@@ -114,44 +154,21 @@ def create_demo_user_if_not_exists(db: Session) -> models.User:
         return mock_user
 
 
-def generate_simple_token(user_id: str, username: str) -> str:
-    """Generate a simple token for demo purposes."""
-    # In production, use proper JWT
-    timestamp = datetime.utcnow().isoformat()
-    token_data = f"{user_id}:{username}:{timestamp}"
-    token = hashlib.md5(token_data.encode()).hexdigest()
-    
-    # Store token with expiration
-    ACTIVE_TOKENS[token] = {
-        "user_id": user_id,
-        "username": username,
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(hours=24)
-    }
-    
-    return token
-
-
-def validate_token(token: str) -> Optional[Dict[str, Any]]:
-    """Validate a token and return user info if valid."""
-    if token not in ACTIVE_TOKENS:
-        return None
-    
-    token_data = ACTIVE_TOKENS[token]
-    
-    # Check if token is expired
-    if datetime.utcnow() > token_data["expires_at"]:
-        del ACTIVE_TOKENS[token]
-        return None
-    
-    return token_data
-
-
-def authenticate_demo_user(username: str, password: str) -> Optional[Dict[str, str]]:
-    """Authenticate demo user with simple credentials."""
+def authenticate_user(db: Session, username: str, password: str) -> Optional[models.User]:
+    """Authenticate a user with username and password."""
+    # For demo user, allow simple authentication
     if username == "demo" and password == "demo123":
-        return DEMO_USERS["demo"]
-    return None
+        return create_demo_user_if_not_exists(db)
+    
+    # For other users, check database
+    user = crud.get_user_by_username(db, username)
+    if not user:
+        return None
+    
+    if not verify_password(password, user.password_hash):
+        return None
+    
+    return user
 
 
 def get_current_user(
@@ -159,14 +176,26 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> models.User:
     """
-    Get current authenticated user from token.
+    Get current authenticated user from JWT token.
     
-    For demo purposes, supports both token-based auth and automatic demo user.
+    Args:
+        authorization: Authorization header with Bearer token
+        db: Database session
+        
+    Returns:
+        Authenticated user object
+        
+    Raises:
+        HTTPException: If authentication fails
     """
     
-    # If no authorization header, create/return demo user
+    # If no authorization header, raise authentication error
     if not authorization:
-        return create_demo_user_if_not_exists(db)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     # Extract token from "Bearer <token>" format
     if not authorization.startswith("Bearer "):
@@ -178,8 +207,8 @@ def get_current_user(
     
     token = authorization.split(" ")[1]
     
-    # Validate token
-    token_data = validate_token(token)
+    # Verify token
+    token_data = verify_token(token)
     if not token_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -218,35 +247,70 @@ def get_current_user_optional(
         return None
 
 
-# Demo helper functions
 def create_demo_assets_if_not_exist(db: Session):
-    """Create some demo assets for testing watchlists and alerts."""
-    demo_assets = [
-        {"symbol": "AAPL", "name": "Apple Inc.", "type": "stock"},
-        {"symbol": "MSFT", "name": "Microsoft Corporation", "type": "stock"},
-        {"symbol": "EURUSD", "name": "Euro to USD", "type": "forex"},
-        {"symbol": "BTC", "name": "Bitcoin", "type": "crypto"},
-        {"symbol": "GOLD", "name": "Gold", "type": "commodity"},
-    ]
-    
-    for asset_data in demo_assets:
-        # Check if asset exists
-        existing = crud.get_asset_by_symbol(db, asset_data["symbol"])
-        if not existing:
-            asset_create = schemas.AssetCreate(**asset_data)
-            crud.create_asset(db, asset_create)
+    """Create demo assets if they don't exist."""
+    try:
+        demo_assets = [
+            {"symbol": "BTC", "name": "Bitcoin", "type": "crypto", "description": "Bitcoin cryptocurrency"},
+            {"symbol": "ETH", "name": "Ethereum", "type": "crypto", "description": "Ethereum cryptocurrency"},
+            {"symbol": "AAPL", "name": "Apple Inc.", "type": "stock", "description": "Apple Inc. stock"},
+            {"symbol": "TSLA", "name": "Tesla Inc.", "type": "stock", "description": "Tesla Inc. stock"},
+            {"symbol": "EUR/USD", "name": "Euro/US Dollar", "type": "forex", "description": "EUR/USD forex pair"},
+        ]
+        
+        for asset_data in demo_assets:
+            existing_asset = crud.get_asset_by_symbol(db, asset_data["symbol"])
+            if not existing_asset:
+                asset_create = schemas.AssetCreate(
+                    symbol=asset_data["symbol"],
+                    name=asset_data["name"],
+                    type=asset_data["type"],
+                    description=asset_data["description"]
+                )
+                crud.create_asset(db, asset_create)
+                logger.info(f"Created demo asset: {asset_data['symbol']}")
+                
+    except Exception as e:
+        logger.error(f"Error creating demo assets: {e}")
+
+
+# Legacy function names for backwards compatibility
+def generate_simple_token(user_id: str, username: str) -> str:
+    """Legacy function - creates JWT token instead of simple hash."""
+    token_data = {"sub": user_id, "username": username}
+    return create_access_token(token_data)
+
+
+def validate_token(token: str) -> Optional[Dict[str, Any]]:
+    """Legacy function - validates JWT token."""
+    return verify_token(token)
+
+
+def authenticate_demo_user(username: str, password: str) -> Optional[Dict[str, str]]:
+    """Legacy function for demo authentication."""
+    if username == "demo" and password == "demo123":
+        return {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "username": "demo",
+            "email": "demo@tradeeasy.com",
+        }
+    return None
 
 
 def login_demo_user() -> Dict[str, str]:
-    """Login demo user and return token."""
-    demo_user = DEMO_USERS["demo"]
-    token = generate_simple_token(demo_user["id"], demo_user["username"])
+    """Login demo user and return JWT token."""
+    demo_user_id = "550e8400-e29b-41d4-a716-446655440000"
+    demo_username = "demo"
+    
+    access_token = create_access_token(
+        data={"sub": demo_user_id, "username": demo_username}
+    )
     
     return {
-        "access_token": token,
+        "access_token": access_token,
         "token_type": "bearer",
-        "user_id": demo_user["id"],
-        "username": demo_user["username"]
+        "user_id": demo_user_id,
+        "username": demo_username
     }
 
 

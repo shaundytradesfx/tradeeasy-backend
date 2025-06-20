@@ -1,14 +1,24 @@
-"""CRUD operations for TradeEasy database models."""
+"""
+CRUD operations for the TradeEasy backend.
 
+This module contains the database operations for managing articles, sentiment,
+assets, watchlists, alerts, and users.
+"""
+
+import logging
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
-from uuid import UUID
+from uuid import uuid4, UUID
 
-from sqlalchemy import func, and_, text, desc
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import and_, desc, func, text, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from . import models, schemas
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Import WebSocket manager for real-time broadcasting
 try:
@@ -254,6 +264,7 @@ def create_sentiment_aggregate(db: Session, aggregate: schemas.SentimentAggregat
 def compute_hourly_sentiment_averages(db: Session, target_hour: Optional[datetime] = None):
     """
     Compute hourly sentiment averages for all assets and store them in SentimentAggregate table.
+    Enhanced with real-time alert checking and WebSocket broadcasting.
     
     Args:
         db: Database session
@@ -314,6 +325,7 @@ def compute_hourly_sentiment_averages(db: Session, target_hour: Optional[datetim
     # Get or create default assets
     default_assets = ['BTC', 'ETH', 'AAPL', 'TSLA', 'EUR/USD']
     created_aggregates = []
+    triggered_alerts_summary = []
     
     for symbol in default_assets:
         # Get or create asset
@@ -351,43 +363,88 @@ def compute_hourly_sentiment_averages(db: Session, target_hour: Optional[datetim
             db.add(aggregate)
             created_aggregates.append(aggregate)
     
+            # Check for triggered alerts with the new sentiment score
+            triggered_alert_ids = check_and_trigger_alerts(db, symbol, combined_avg)
+            if triggered_alert_ids:
+                triggered_alerts_summary.extend([
+                    {
+                        "alert_id": alert_id,
+                        "asset_symbol": symbol,
+                        "sentiment_score": combined_avg,
+                        "timestamp": datetime.utcnow()
+                    }
+                    for alert_id in triggered_alert_ids
+                ])
+                logger.info(f"Triggered {len(triggered_alert_ids)} alerts for {symbol} with sentiment {combined_avg:.3f}")
+
     if created_aggregates:
         db.commit()
         for agg in created_aggregates:
             db.refresh(agg)
     
-        # Broadcast aggregate updates via WebSocket if available
-        if WEBSOCKET_AVAILABLE and websocket_manager:
+        # Broadcast aggregate updates and triggered alerts via WebSocket
+        try:
+            # Check if there's an event loop running
             try:
-                import asyncio
-                
-                for agg in created_aggregates:
-                    # Get asset information
-                    asset = db.query(models.Asset).filter(models.Asset.id == agg.asset_id).first()
+                loop = asyncio.get_running_loop()
+                websocket_available = True
+            except RuntimeError:
+                # No event loop running, skip WebSocket broadcasting
+                websocket_available = False
+                logger.info("No event loop running, skipping WebSocket broadcasting")
+            
+            if websocket_available and WEBSOCKET_AVAILABLE and websocket_manager:
+                # Broadcast each new aggregate
+                for aggregate in created_aggregates:
+                    asset = db.query(models.Asset).filter(models.Asset.id == aggregate.asset_id).first()
                     if asset:
-                        aggregate_data = {
-                            "avg_score": agg.avg_score,
-                            "article_count": len(article_ids),  # Approximate count
-                            "time_period": "1h"
-                        }
-                        
-                        # Schedule the broadcast
-                        asyncio.create_task(
+                        # Broadcast aggregate update
+                        loop.create_task(
                             websocket_manager.broadcast_aggregate_update(
-                                asset.symbol, aggregate_data
+                                asset.symbol,
+                                {
+                                    "avg_score": aggregate.avg_score,
+                                    "article_count": len(articles_in_hour),
+                                    "time_period": "1h"
+                                }
                             )
                         )
-                        
-            except Exception as ws_error:
-                # Don't fail the whole operation if WebSocket broadcasting fails
-                pass  # Silently fail to avoid breaking the aggregation process
+
+                # Broadcast triggered alerts
+                for alert_info in triggered_alerts_summary:
+                    # Get alert details for broadcasting
+                    alert = get_alert(db, alert_info["alert_id"])
+                    if alert:
+                        asset = get_asset_by_id(db, alert.asset_id)
+                        loop.create_task(
+                            websocket_manager.broadcast_alert_triggered({
+                                "alert_id": alert.id,
+                                "asset_symbol": asset.symbol if asset else "unknown",
+                                "threshold": alert.threshold,
+                                "direction": alert.direction,
+                                "sentiment_score": alert_info["sentiment_score"],
+                                "triggered_at": alert.triggered_at.isoformat() if alert.triggered_at else None,
+                                "user_id": alert.user_id
+                            })
+                        )
+
+                logger.info(f"Broadcasted {len(created_aggregates)} aggregate updates and {len(triggered_alerts_summary)} triggered alerts via WebSocket")
+            else:
+                logger.info(f"WebSocket broadcasting skipped - websocket_available: {websocket_available}, WEBSOCKET_AVAILABLE: {WEBSOCKET_AVAILABLE}")
+
+        except Exception as ws_error:
+            logger.warning(f"WebSocket broadcasting failed: {ws_error}")
+
+        # Log summary
+        if triggered_alerts_summary:
+            logger.info(f"Hourly aggregates computation triggered {len(triggered_alerts_summary)} alerts across {len(set(alert['asset_symbol'] for alert in triggered_alerts_summary))} assets")
     
     return created_aggregates
 
 
 def get_latest_sentiment_by_asset_symbol(db: Session, symbol: str):
     """
-    Get the latest sentiment aggregate for a specific asset symbol.
+    Get the latest sentiment aggregate for a specific asset by symbol.
     
     Args:
         db: Database session
@@ -396,10 +453,13 @@ def get_latest_sentiment_by_asset_symbol(db: Session, symbol: str):
     Returns:
         Latest SentimentAggregate object or None
     """
+    asset = get_asset_by_symbol(db, symbol)
+    if not asset:
+        return None
+        
     return (
         db.query(models.SentimentAggregate)
-        .join(models.Asset)
-        .filter(models.Asset.symbol == symbol)
+        .filter(models.SentimentAggregate.asset_id == asset.id)
         .order_by(models.SentimentAggregate.timestamp.desc())
         .first()
     )
@@ -786,11 +846,11 @@ def get_user_by_email(db: Session, email: str):
 
 
 def create_user(db: Session, user: schemas.UserCreate):
-    """Create a new user."""
-    import hashlib
+    """Create a new user with proper password hashing."""
+    from .auth import get_password_hash
     
-    # Hash password (simple hash for demo - use proper hashing in production)
-    password_hash = hashlib.sha256(user.password.encode()).hexdigest()
+    # Hash password using bcrypt
+    password_hash = get_password_hash(user.password)
     
     db_user = models.User(
         username=user.username,
@@ -903,3 +963,78 @@ def reset_alert(db: Session, alert_id: UUID):
         db.commit()
         return alert
     return None
+
+
+def get_sentiment_updates_since(db: Session, since_timestamp: Optional[datetime] = None):
+    """
+    Get sentiment aggregates and articles with sentiment data since a given timestamp.
+    
+    Args:
+        db: Database session
+        since_timestamp: Optional timestamp to filter data from. If None, returns recent data from last hour.
+        
+    Returns:
+        Tuple of (sentiment_aggregates, articles_with_sentiment)
+    """
+    # Default to last hour if no timestamp provided
+    if since_timestamp is None:
+        since_timestamp = datetime.utcnow() - timedelta(hours=1)
+    
+    try:
+        # Get sentiment aggregates since timestamp (with limit for performance)
+        sentiment_aggregates = (
+            db.query(models.SentimentAggregate)
+            .join(models.Asset)
+            .filter(models.SentimentAggregate.timestamp >= since_timestamp)
+            .order_by(models.SentimentAggregate.timestamp.desc())
+            .limit(100)  # Add limit for performance
+            .all()
+        )
+        
+        # Get articles with sentiment data since timestamp (with smaller limit)
+        articles_with_sentiment = (
+            db.query(models.Article, models.Sentiment)
+            .join(models.Sentiment, models.Article.id == models.Sentiment.article_id)
+            .filter(models.Article.published_at >= since_timestamp)
+            .order_by(models.Article.published_at.desc())
+            .limit(20)  # Reduced limit to improve performance
+            .all()
+        )
+        
+        return sentiment_aggregates, articles_with_sentiment
+        
+    except Exception as e:
+        # Return empty results if query fails
+        logger.warning(f"Database query failed in get_sentiment_updates_since: {e}")
+        return [], []
+
+
+def get_triggered_alerts_since(db: Session, since_timestamp: Optional[datetime] = None):
+    """
+    Get alerts that were triggered since a given timestamp.
+    
+    Args:
+        db: Database session
+        since_timestamp: Optional timestamp to filter alerts from. If None, returns alerts from last hour.
+        
+    Returns:
+        List of triggered Alert objects
+    """
+    # Default to last hour if no timestamp provided
+    if since_timestamp is None:
+        since_timestamp = datetime.utcnow() - timedelta(hours=1)
+    
+    try:
+        return (
+            db.query(models.Alert)
+            .join(models.Asset)
+            .filter(models.Alert.triggered_at >= since_timestamp)
+            .filter(models.Alert.triggered_at.isnot(None))
+            .order_by(models.Alert.triggered_at.desc())
+            .limit(50)  # Add limit for performance
+            .all()
+        )
+    except Exception as e:
+        # Return empty list if query fails
+        logger.warning(f"Database query failed in get_triggered_alerts_since: {e}")
+        return []

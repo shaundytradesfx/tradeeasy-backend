@@ -1,0 +1,58 @@
+[
+  {
+    "test_id": "ETC-SENT-001-1",
+    "test_name": "Empty Content",
+    "status": "FAIL",
+    "details": "Unexpected status code: 400",
+    "timestamp": "2025-06-13T16:56:58.064468"
+  },
+  {
+    "test_id": "ETC-SENT-001-2",
+    "test_name": "Single Character",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.0, finbert=0.03699715435504913",
+    "timestamp": "2025-06-13T16:57:06.557617"
+  },
+  {
+    "test_id": "ETC-SENT-001-3",
+    "test_name": "Only Whitespace",
+    "status": "FAIL",
+    "details": "Unexpected status code: 400",
+    "timestamp": "2025-06-13T16:57:06.563157"
+  },
+  {
+    "test_id": "ETC-SENT-001-4",
+    "test_name": "Only Punctuation",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.0, finbert=-0.025902261957526207",
+    "timestamp": "2025-06-13T16:57:06.646967"
+  },
+  {
+    "test_id": "ETC-SENT-001-5",
+    "test_name": "Extremely Long Content",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.0, finbert=-0.02039315551519394",
+    "timestamp": "2025-06-13T16:57:06.738051"
+  },
+  {
+    "test_id": "ETC-SENT-001-6",
+    "test_name": "Unicode and Emojis",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.0, finbert=0.04072532057762146",
+    "timestamp": "2025-06-13T16:57:06.821945"
+  },
+  {
+    "test_id": "ETC-SENT-001-7",
+    "test_name": "HTML Entities",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.0, finbert=0.20982380583882332",
+    "timestamp": "2025-06-13T16:57:06.922941"
+  },
+  {
+    "test_id": "ETC-SENT-001-8",
+    "test_name": "Mixed Languages",
+    "status": "PASS",
+    "details": "Scores: lexicon=0.2, finbert=-0.527029737830162",
+    "timestamp": "2025-06-13T16:57:06.987376"
+  }
+]

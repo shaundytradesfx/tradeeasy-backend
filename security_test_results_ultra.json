@@ -1,0 +1,140 @@
+[
+  {
+    "test": "Server Health",
+    "passed": true,
+    "details": "Server is responding",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Security Headers",
+    "passed": true,
+    "details": "All security headers present",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Rate Limit Headers",
+    "passed": true,
+    "details": "All headers present (Limit: 30, Remaining: 29)",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Text Length Validation",
+    "passed": true,
+    "details": "Long text rejected",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Asset Symbol Validation",
+    "passed": true,
+    "details": "Invalid symbol rejected: AAPL<script>...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Asset Symbol Validation",
+    "passed": true,
+    "details": "Invalid symbol rejected: BTC'; DROP TABLE...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Asset Symbol Validation",
+    "passed": true,
+    "details": "Invalid symbol rejected: ETH@#$%...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Asset Symbol Validation",
+    "passed": true,
+    "details": "Invalid symbol rejected: AAAAAAAAAAAAAAAAAAAA...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "XSS Prevention",
+    "passed": true,
+    "details": "Sanitized payload: <script>alert('XSS')</script>...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "XSS Prevention",
+    "passed": true,
+    "details": "Sanitized payload: javascript:alert('XSS')...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "XSS Prevention",
+    "passed": true,
+    "details": "Sanitized payload: <img src=x onerror=alert('XSS'...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "XSS Prevention",
+    "passed": true,
+    "details": "Sanitized payload: <iframe src='javascript:alert(...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "XSS Prevention",
+    "passed": true,
+    "details": "Sanitized payload: ';alert('XSS');//...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: '; DROP TABLE articles; --...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: ' OR 1=1 --...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: ' UNION SELECT * FROM users --...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: '; DELETE FROM articles WHERE ...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Query processed safely: ' OR 'a'='a...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: admin'--...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "SQL Injection Prevention",
+    "passed": true,
+    "details": "Blocked payload: ' OR 1=1#...",
+    "timestamp": "2025-06-13 18:41:09"
+  },
+  {
+    "test": "Ultra-Aggressive Rate Limiting",
+    "passed": false,
+    "details": "Rate limiting not triggered: 17 succeeded, 0 blocked",
+    "timestamp": "2025-06-13 18:41:10"
+  },
+  {
+    "test": "Auth Rate Limiting",
+    "passed": false,
+    "details": "Rate limiting not triggered: 10 succeeded",
+    "timestamp": "2025-06-13 18:41:10"
+  },
+  {
+    "test": "Sentiment Endpoint",
+    "passed": true,
+    "details": "High limit endpoint working: 25 succeeded, 0 limited",
+    "timestamp": "2025-06-13 18:41:10"
+  }
+]

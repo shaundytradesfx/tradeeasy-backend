@@ -1,0 +1,958 @@
+{
+  "info": {
+    "name": "TradeEasy API Collection",
+    "description": "Comprehensive collection for TradeEasy sentiment analytics API. Includes authentication, sentiment analysis, search, watchlists, alerts, and real-time endpoints.",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-authenticate if no token exists",
+          "if (!pm.environment.get('jwt_token')) {",
+          "    console.log('No JWT token found, attempting demo login...');",
+          "    pm.sendRequest({",
+          "        url: pm.environment.get('base_url') + '/api/auth/demo-login',",
+          "        method: 'GET'",
+          "    }, function (err, response) {",
+          "        if (err) {",
+          "            console.log('Demo login failed:', err);",
+          "        } else {",
+          "            const responseJson = response.json();",
+          "            pm.environment.set('jwt_token', responseJson.access_token);",
+          "            pm.environment.set('user_id', responseJson.user_id);",
+          "            console.log('Demo login successful, token set');",
+          "        }",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Demo Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has access token', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('access_token');",
+                  "    pm.expect(responseJson).to.have.property('user_id');",
+                  "    ",
+                  "    // Store token for future requests",
+                  "    pm.environment.set('jwt_token', responseJson.access_token);",
+                  "    pm.environment.set('user_id', responseJson.user_id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/demo-login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "demo-login"]
+            },
+            "description": "Quick demo login for testing. Returns JWT token for authentication."
+          }
+        },
+        {
+          "name": "Standard Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has access token', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('access_token');",
+                  "    pm.environment.set('jwt_token', responseJson.access_token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"demo\",\n  \"password\": \"demo123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Standard login with username and password."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Logout user (client-side token invalidation)."
+          }
+        },
+        {
+          "name": "Auth Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "status"]
+            },
+            "description": "Get authentication system status."
+          }
+        }
+      ],
+      "description": "Authentication endpoints for JWT token management."
+    },
+    {
+      "name": "Sentiment Analysis",
+      "item": [
+        {
+          "name": "Analyze Article Sentiment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has sentiment scores', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('lexicon_score');",
+                  "    pm.expect(responseJson).to.have.property('finbert_score');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Apple Inc. reported strong quarterly earnings, beating analyst expectations by 15%. The company's innovative product lineup continues to drive growth in the competitive technology sector.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/article",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "article"]
+            },
+            "description": "Analyze sentiment of input text using both Loughran-McDonald lexicon and FinBERT models."
+          }
+        },
+        {
+          "name": "Get Latest Sentiment - BTC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has sentiment data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    if (responseJson) {",
+                  "        pm.expect(responseJson).to.have.property('avg_score');",
+                  "        pm.expect(responseJson).to.have.property('asset');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/latest?asset=BTC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "latest"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "BTC"
+                }
+              ]
+            },
+            "description": "Get the latest sentiment aggregate for Bitcoin."
+          }
+        },
+        {
+          "name": "Get Latest Sentiment - AAPL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/latest?asset=AAPL",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "latest"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "AAPL"
+                }
+              ]
+            },
+            "description": "Get the latest sentiment aggregate for Apple Inc."
+          }
+        },
+        {
+          "name": "Get Sentiment History - 24h",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/history?asset=BTC&range=24h",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "history"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "BTC"
+                },
+                {
+                  "key": "range",
+                  "value": "24h"
+                }
+              ]
+            },
+            "description": "Get 24-hour sentiment history for Bitcoin."
+          }
+        },
+        {
+          "name": "Get Sentiment History - Custom Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/history?asset=AAPL&start=2024-01-01T00:00:00Z&end=2024-01-15T23:59:59Z",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "history"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "AAPL"
+                },
+                {
+                  "key": "start",
+                  "value": "2024-01-01T00:00:00Z"
+                },
+                {
+                  "key": "end",
+                  "value": "2024-01-15T23:59:59Z"
+                }
+              ]
+            },
+            "description": "Get sentiment history for Apple with custom date range."
+          }
+        },
+        {
+          "name": "Get Sentiment Stream",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has stream data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('updates');",
+                  "    pm.expect(responseJson).to.have.property('aggregates');",
+                  "    pm.expect(responseJson).to.have.property('alerts');",
+                  "    pm.expect(responseJson).to.have.property('metadata');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/stream",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "stream"]
+            },
+            "description": "Get sentiment updates for polling clients (REST alternative to WebSocket)."
+          }
+        },
+        {
+          "name": "Get Available Assets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/assets?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "assets"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get list of available assets for sentiment analysis."
+          }
+        },
+        {
+          "name": "Compute Hourly Aggregates",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/compute-hourly",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "compute-hourly"]
+            },
+            "description": "Manually trigger computation of hourly sentiment aggregates."
+          }
+        }
+      ],
+      "description": "Sentiment analysis endpoints for text analysis and historical data."
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "Search Articles with Sentiment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has search results', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('results');",
+                  "    pm.expect(responseJson).to.have.property('total_count');",
+                  "    pm.expect(responseJson).to.have.property('has_more');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/search/?q=Federal Reserve interest rates&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "search", ""],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Federal Reserve interest rates"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Search articles with sentiment analysis data."
+          }
+        },
+        {
+          "name": "Search Articles Only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/search/articles?q=earnings report&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "search", "articles"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "earnings report"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Search articles without sentiment data for faster responses."
+          }
+        },
+        {
+          "name": "Get Search Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/search/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "search", "stats"]
+            },
+            "description": "Get search-related statistics and information."
+          }
+        }
+      ],
+      "description": "Search endpoints for finding articles and content."
+    },
+    {
+      "name": "Watchlists",
+      "item": [
+        {
+          "name": "Get User Watchlists",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", ""]
+            },
+            "description": "Get all watchlists for the authenticated user."
+          }
+        },
+        {
+          "name": "Add Asset to Watchlist - BTC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has watchlist data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('asset');",
+                  "    pm.environment.set('watchlist_id', responseJson.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/?asset_symbol=BTC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "BTC"
+                }
+              ]
+            },
+            "description": "Add Bitcoin to user's watchlist."
+          }
+        },
+        {
+          "name": "Add Asset to Watchlist - AAPL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/?asset_symbol=AAPL",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "AAPL"
+                }
+              ]
+            },
+            "description": "Add Apple Inc. to user's watchlist."
+          }
+        },
+        {
+          "name": "Remove from Watchlist by Symbol",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/by-symbol/BTC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", "by-symbol", "BTC"]
+            },
+            "description": "Remove Bitcoin from watchlist by symbol."
+          }
+        },
+        {
+          "name": "Get Watchlist Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", "stats"]
+            },
+            "description": "Get watchlist statistics for the current user."
+          }
+        }
+      ],
+      "description": "Watchlist management endpoints (requires authentication)."
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Get User Alerts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", ""]
+            },
+            "description": "Get all alerts for the authenticated user."
+          }
+        },
+        {
+          "name": "Create Alert - BTC Above 0.5",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has alert data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('threshold');",
+                  "    pm.environment.set('alert_id', responseJson.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/?asset_symbol=BTC&threshold=0.5&direction=above",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "BTC"
+                },
+                {
+                  "key": "threshold",
+                  "value": "0.5"
+                },
+                {
+                  "key": "direction",
+                  "value": "above"
+                }
+              ]
+            },
+            "description": "Create alert for Bitcoin sentiment above 0.5."
+          }
+        },
+        {
+          "name": "Create Alert - AAPL Below -0.3",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/?asset_symbol=AAPL&threshold=-0.3&direction=below",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "AAPL"
+                },
+                {
+                  "key": "threshold",
+                  "value": "-0.3"
+                },
+                {
+                  "key": "direction",
+                  "value": "below"
+                }
+              ]
+            },
+            "description": "Create alert for Apple sentiment below -0.3."
+          }
+        },
+        {
+          "name": "Get Triggered Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/triggered?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", "triggered"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get recently triggered alerts."
+          }
+        },
+        {
+          "name": "Test Alert Trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/test-trigger?asset_symbol=BTC&sentiment_score=0.7",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", "test-trigger"],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "BTC"
+                },
+                {
+                  "key": "sentiment_score",
+                  "value": "0.7"
+                }
+              ]
+            },
+            "description": "Test alert triggering for specific asset and sentiment score."
+          }
+        },
+        {
+          "name": "Get Alert Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", "stats"]
+            },
+            "description": "Get alert statistics for the current user."
+          }
+        }
+      ],
+      "description": "Alert management endpoints (requires authentication)."
+    },
+    {
+      "name": "System & Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has status ok', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Basic health check endpoint."
+          }
+        },
+        {
+          "name": "API Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "status"]
+            },
+            "description": "Comprehensive API status including features."
+          }
+        },
+        {
+          "name": "WebSocket Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/websocket/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "websocket", "stats"]
+            },
+            "description": "Get WebSocket connection statistics."
+          }
+        },
+        {
+          "name": "Performance Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/performance/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "performance", "stats"]
+            },
+            "description": "Get real-time performance statistics."
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["metrics"]
+            },
+            "description": "Get Prometheus metrics."
+          }
+        }
+      ],
+      "description": "System monitoring and health check endpoints."
+    },
+    {
+      "name": "Ingestion & Admin",
+      "item": [
+        {
+          "name": "Trigger RSS Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingestion/ingestion/rss",
+              "host": ["{{base_url}}"],
+              "path": ["ingestion", "ingestion", "rss"]
+            },
+            "description": "Manually trigger RSS ingestion process."
+          }
+        },
+        {
+          "name": "Get RSS Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingestion/ingestion/sources",
+              "host": ["{{base_url}}"],
+              "path": ["ingestion", "ingestion", "sources"]
+            },
+            "description": "Get list of RSS sources being monitored."
+          }
+        },
+        {
+          "name": "Get Ingestion Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingestion/ingestion/status",
+              "host": ["{{base_url}}"],
+              "path": ["ingestion", "ingestion", "status"]
+            },
+            "description": "Get current ingestion status and metrics."
+          }
+        },
+        {
+          "name": "Get Ingestion Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ingestion/ingestion/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["ingestion", "ingestion", "metrics"]
+            },
+            "description": "Get detailed ingestion metrics."
+          }
+        }
+      ],
+      "description": "RSS ingestion and administrative endpoints."
+    }
+  ]
+} 

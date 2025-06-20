@@ -1,0 +1,98 @@
+{
+  "prometheus_server": {
+    "Prometheus Server Enabled": {
+      "success": true,
+      "details": "start_http_server(8001) is active",
+      "timestamp": "2025-06-08T15:06:27.090416"
+    },
+    "Prometheus Import": {
+      "success": true,
+      "details": "prometheus_client imported correctly",
+      "timestamp": "2025-06-08T15:06:27.090432"
+    },
+    "Prometheus Config": {
+      "success": true,
+      "details": "Found 3 TradeEasy scrape jobs",
+      "timestamp": "2025-06-08T15:06:27.250930"
+    },
+    "Grafana prometheus.yml": {
+      "success": true,
+      "details": "Configuration file exists and valid",
+      "timestamp": "2025-06-08T15:06:27.270457"
+    }
+  },
+  "metrics_collection": {
+    "Metrics Server (8001)": {
+      "success": false,
+      "details": "Connection failed: All connection attempts failed",
+      "timestamp": "2025-06-08T15:06:27.242571"
+    },
+    "API Metrics Endpoint": {
+      "success": false,
+      "details": "Connection failed: All connection attempts failed",
+      "timestamp": "2025-06-08T15:06:27.244093"
+    }
+  },
+  "grafana_config": {
+    "Grafana dashboard.yml": {
+      "success": true,
+      "details": "Configuration file exists and valid",
+      "timestamp": "2025-06-08T15:06:27.272458"
+    },
+    "Grafana Dashboard": {
+      "success": true,
+      "details": "Dashboard with 5 panels configured",
+      "timestamp": "2025-06-08T15:06:27.273858"
+    }
+  },
+  "alerting_rules": {
+    "Alerting Rules": {
+      "success": true,
+      "details": "7 alerting rules configured",
+      "timestamp": "2025-06-08T15:06:27.260489"
+    },
+    "Alertmanager Receivers": {
+      "success": true,
+      "details": "3 receivers configured",
+      "timestamp": "2025-06-08T15:06:27.279607"
+    },
+    "Alertmanager Routes": {
+      "success": true,
+      "details": "2 routes configured",
+      "timestamp": "2025-06-08T15:06:27.279618"
+    }
+  },
+  "integration_tests": {
+    "Rule Files Config": {
+      "success": true,
+      "details": "tradeeasy_rules.yml configured",
+      "timestamp": "2025-06-08T15:06:27.250962"
+    },
+    "Docker Compose": {
+      "success": true,
+      "details": "Grafana and Prometheus services configured",
+      "timestamp": "2025-06-08T15:06:27.267457"
+    },
+    "Backend Health Check": {
+      "success": false,
+      "details": "Connection failed: All connection attempts failed",
+      "timestamp": "2025-06-08T15:06:27.293542"
+    },
+    "Configuration Files": {
+      "success": true,
+      "details": "All monitoring configuration files present",
+      "timestamp": "2025-06-08T15:06:27.296917"
+    },
+    "Docker Compose Validation": {
+      "success": true,
+      "details": "Configuration is valid",
+      "timestamp": "2025-06-08T15:06:27.565146"
+    }
+  },
+  "summary": {
+    "total_tests": 16,
+    "passed_tests": 13,
+    "success_rate": 81.25,
+    "timestamp": "2025-06-08T15:06:27.565804"
+  }
+}

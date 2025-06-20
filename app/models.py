@@ -1,7 +1,7 @@
 """SQLAlchemy models for the TradeEasy backend application.
 
 This module defines the database models for users, assets, articles, sentiments,
-sentiment aggregates, watchlists, and alerts.
+sentiment aggregates, watchlists, and alerts with optimized indexes.
 """
 import uuid
 from datetime import datetime
@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -69,10 +70,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(128), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, nullable=True)
 
     # Define relationships
@@ -88,9 +89,9 @@ class Asset(Base):
     __tablename__ = "assets"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    symbol = Column(String(20), unique=True, nullable=False)
+    symbol = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
-    type = Column(String(20), nullable=False)  # stock, forex, crypto, commodity
+    type = Column(String(20), nullable=False, index=True)  # stock, forex, crypto, commodity
     description = Column(Text, nullable=True)
 
     # Define relationships
@@ -102,6 +103,11 @@ class Asset(Base):
     )
     alerts = relationship("Alert", back_populates="asset", cascade="all, delete-orphan")
 
+    # Additional indexes for performance
+    __table_args__ = (
+        Index("idx_asset_symbol_type", "symbol", "type"),
+    )
+
 
 class Article(Base):
     """Model for storing news articles."""
@@ -109,10 +115,10 @@ class Article(Base):
     __tablename__ = "articles"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    source = Column(String(255), nullable=False)
+    source = Column(String(255), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    published_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    published_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     url = Column(String(512), nullable=False, unique=True)
     authors = Column(String(512), nullable=True)  # Comma-separated list of authors
     image_url = Column(String(1024), nullable=True)  # URL to the top image
@@ -123,6 +129,12 @@ class Article(Base):
         "Sentiment", back_populates="article", cascade="all, delete-orphan"
     )
 
+    # Additional indexes for performance
+    __table_args__ = (
+        Index("idx_article_published_source", "published_at", "source"),
+        Index("idx_article_url_hash", "url"),  # For fast deduplication
+    )
+
 
 class Sentiment(Base):
     """Model for storing sentiment analysis results for articles."""
@@ -130,12 +142,17 @@ class Sentiment(Base):
     __tablename__ = "sentiments"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    article_id = Column(GUID(), ForeignKey("articles.id"), nullable=False)
+    article_id = Column(GUID(), ForeignKey("articles.id"), nullable=False, index=True)
     lexicon_score = Column(Float)
     finbert_score = Column(Float)
 
     # Define relationship with Article
     article = relationship("Article", back_populates="sentiments")
+
+    # Additional indexes for performance
+    __table_args__ = (
+        Index("idx_sentiment_article_scores", "article_id", "lexicon_score", "finbert_score"),
+    )
 
 
 class SentimentAggregate(Base):
@@ -144,15 +161,19 @@ class SentimentAggregate(Base):
     __tablename__ = "sentiment_aggregates"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False)
-    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow)
+    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     avg_score = Column(Float, nullable=False)
 
     # Define relationship with Asset
     asset = relationship("Asset", back_populates="sentiment_aggregates")
 
-    # SQLite doesn't support partitioning, only use this for PostgreSQL
-    __table_args__ = ()
+    # Performance indexes for frequent queries
+    __table_args__ = (
+        Index("idx_sentiment_agg_asset_timestamp", "asset_id", "timestamp"),
+        Index("idx_sentiment_agg_timestamp_score", "timestamp", "avg_score"),
+        Index("idx_sentiment_agg_asset_timestamp_desc", "asset_id", "timestamp"),
+    )
 
 
 class Watchlist(Base):
@@ -161,17 +182,18 @@ class Watchlist(Base):
     __tablename__ = "watchlists"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False, index=True)
+    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     # Define relationships
     user = relationship("User", back_populates="watchlists")
     asset = relationship("Asset", back_populates="watchlists")
 
-    # Ensure a user can't add the same asset twice
+    # Ensure a user can't add the same asset twice + performance indexes
     __table_args__ = (
         UniqueConstraint("user_id", "asset_id", name="uq_watchlist_user_asset"),
+        Index("idx_watchlist_user_created", "user_id", "created_at"),
     )
 
 
@@ -181,14 +203,22 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
-    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False)
+    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False, index=True)
+    asset_id = Column(GUID(), ForeignKey("assets.id"), nullable=False, index=True)
     threshold = Column(Float, nullable=False)
-    direction = Column(String(10), nullable=False)  # 'above' or 'below'
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    triggered_at = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
+    direction = Column(String(10), nullable=False, index=True)  # 'above' or 'below'
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    triggered_at = Column(DateTime, nullable=True, index=True)
+    is_active = Column(Boolean, default=True, index=True)
 
     # Define relationships
     user = relationship("User", back_populates="alerts")
     asset = relationship("Asset", back_populates="alerts")
+
+    # Performance indexes for alert processing
+    __table_args__ = (
+        Index("idx_alert_user_active", "user_id", "is_active"),
+        Index("idx_alert_asset_active", "asset_id", "is_active"),
+        Index("idx_alert_triggered", "triggered_at"),
+        Index("idx_alert_asset_active_threshold", "asset_id", "is_active", "threshold"),
+    )

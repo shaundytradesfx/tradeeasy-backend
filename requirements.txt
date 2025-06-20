@@ -11,3 +11,13 @@ pytest
 httpx
 spacy
 beautifulsoup4
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+aiohttp
+psutil
+locust
+pytest-asyncio
+pytest-mock
+pytest-cov
+coverage

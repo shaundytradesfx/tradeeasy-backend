@@ -198,7 +198,7 @@ class HealthCheck(BaseModel):
 
 # Search schemas
 class SearchRequest(BaseModel):
-    q: str = Field(..., description="Search query string")
+    query: str
     skip: int = Field(0, ge=0, description="Number of records to skip")
     limit: int = Field(100, ge=1, le=1000, description="Maximum number of records to return")
 
@@ -230,3 +230,73 @@ class SearchSuggestion(BaseModel):
     category: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Sentiment Streaming schemas
+class SentimentUpdateData(BaseModel):
+    """Individual sentiment update data for streaming."""
+    id: str
+    title: str
+    source: str
+    url: str
+    published_at: str
+    asset_class: str
+
+
+class SentimentScores(BaseModel):
+    """Sentiment scores for streaming."""
+    lexicon_score: Optional[float] = None
+    finbert_score: Optional[float] = None
+    overall_sentiment: str
+
+
+class SentimentUpdate(BaseModel):
+    """Sentiment update message for streaming."""
+    type: str = "sentiment_update"
+    timestamp: str
+    article: SentimentUpdateData
+    sentiment: SentimentScores
+    metadata: dict
+
+
+class AggregateAssetData(BaseModel):
+    """Asset aggregate data for streaming."""
+    symbol: str
+    avg_sentiment: float
+    article_count: int
+    time_period: str
+
+
+class AggregateUpdate(BaseModel):
+    """Aggregate update message for streaming."""
+    type: str = "aggregate_update"
+    timestamp: str
+    asset: AggregateAssetData
+    sentiment_category: str
+    metadata: dict
+
+
+class AlertTriggerData(BaseModel):
+    """Alert trigger data for streaming."""
+    id: str
+    asset_symbol: str
+    threshold: float
+    direction: str
+    current_value: float
+    user_id: str
+
+
+class AlertUpdate(BaseModel):
+    """Alert update message for streaming."""
+    type: str = "alert_triggered"
+    timestamp: str
+    alert: AlertTriggerData
+    metadata: dict
+
+
+class SentimentStreamResponse(BaseModel):
+    """Response for sentiment streaming endpoint."""
+    updates: List[SentimentUpdate]
+    aggregates: List[AggregateUpdate]
+    alerts: List[AlertUpdate]
+    metadata: dict

@@ -1,0 +1,275 @@
+{
+  "info": {
+    "name": "TradeEasy API Collection",
+    "description": "Comprehensive collection for TradeEasy sentiment analytics API",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "jwt_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Demo Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const responseJson = pm.response.json();",
+                  "pm.environment.set('jwt_token', responseJson.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/demo-login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "demo-login"]
+            }
+          }
+        },
+        {
+          "name": "Standard Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"demo\",\n  \"password\": \"demo123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sentiment Analysis",
+      "item": [
+        {
+          "name": "Analyze Article Sentiment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Apple Inc. reported strong quarterly earnings, beating expectations.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/article",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "article"]
+            }
+          }
+        },
+        {
+          "name": "Get Latest Sentiment - BTC",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/latest?asset=BTC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "latest"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "BTC"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sentiment History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/history?asset=BTC&range=24h",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "history"],
+              "query": [
+                {
+                  "key": "asset",
+                  "value": "BTC"
+                },
+                {
+                  "key": "range",
+                  "value": "24h"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sentiment Stream",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/sentiment/stream",
+              "host": ["{{base_url}}"],
+              "path": ["api", "sentiment", "stream"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "Search Articles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/search/?q=Federal Reserve&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "search", ""],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Federal Reserve"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Watchlists",
+      "item": [
+        {
+          "name": "Get Watchlists",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", ""]
+            }
+          }
+        },
+        {
+          "name": "Add to Watchlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/watchlists/?asset_symbol=BTC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "watchlists", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "BTC"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Get Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/?asset_symbol=BTC&threshold=0.5&direction=above",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alerts", ""],
+              "query": [
+                {
+                  "key": "asset_symbol",
+                  "value": "BTC"
+                },
+                {
+                  "key": "threshold",
+                  "value": "0.5"
+                },
+                {
+                  "key": "direction",
+                  "value": "above"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+} 
